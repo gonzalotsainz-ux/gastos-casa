@@ -19,7 +19,29 @@
 
 <!-- Pantalla de bienvenida / login -->
 <div id="login-screen" class="login-screen">
-  <div class="login-card">
+
+  <!-- Pantalla SIMPLE (preconfigurada): 4 botones por miembro de los 2 hogares -->
+  <div id="login-quick" class="login-card login-quick hidden">
+    <div class="login-brand">
+      <img src="icon.svg" alt="" class="login-logo" />
+      <h1>Gastos Casa</h1>
+      <p class="muted">Pulsa tu nombre para entrar</p>
+    </div>
+    <div id="login-quick-hogares"></div>
+    <form id="form-quick-pin" class="form-stack hidden">
+      <label>
+        <span>PIN de <strong id="quick-login-name"></strong></span>
+        <input name="pin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" required autofocus placeholder="••••" />
+      </label>
+      <div class="form-row two">
+        <button type="button" id="btn-quick-cancel" class="ghost">Atrás</button>
+        <button type="submit" class="primary">Entrar</button>
+      </div>
+      <p id="quick-login-err" class="error hidden">PIN incorrecto</p>
+    </form>
+  </div>
+
+  <div class="login-card" id="login-card-classic">
     <div class="login-brand">
       <img src="icon.svg" alt="" class="login-logo" />
       <h1>Gastos Casa</h1>

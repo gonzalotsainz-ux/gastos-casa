@@ -217,6 +217,48 @@ h3 { font-size: .82rem; color: var(--ink-soft); font-weight: 500; }
   box-shadow: 0 0 0 1px rgba(255,255,255,0.08), inset 0 1px 0 rgba(255,255,255,0.12);
 }
 .member-btn .nm { font-weight: 500; }
+/* Login simplificado: 2 hogares × 2 miembros */
+.login-quick { max-width: 520px; }
+.quick-hogar {
+  margin: 22px 0;
+  padding: 18px 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  position: relative;
+}
+.quick-hogar::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 16px;
+  width: 32px; height: 3px;
+  background: var(--c, var(--brand));
+  border-radius: 0 0 3px 3px;
+  background: linear-gradient(180deg, var(--brand), transparent);
+}
+.quick-hogar h2 {
+  margin: 0 0 14px;
+  font-size: .82rem;
+  font-weight: 500;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.quick-miembros {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.quick-member-btn {
+  padding: 18px 14px;
+}
+.quick-member-btn .avatar {
+  width: 44px; height: 44px;
+  font-size: 1.05rem;
+}
+@media (max-width: 480px) {
+  .quick-miembros { grid-template-columns: 1fr; }
+}
+
 .login-advanced {
   margin-top: 22px;
   padding-top: 22px;

@@ -1,7 +1,34 @@
 // ========== Gastos Casa — gestor de finanzas en pareja ==========
 
+// Configuración fija de la app: las dos casas preconfiguradas.
+// La Master Key y los Bin IDs se rellenan aquí y la app las usa sin pedir al usuario.
+const APP_CONFIG = {
+  masterKey: "PENDIENTE_MASTER_KEY",
+  hogares: [
+    {
+      key: "ali-gon",
+      nombre: "Casa ALI y GON",
+      binId: "PENDIENTE_HOGAR_1",
+      miembros: ["ALI", "GON"],
+      color: "#7a4ec5",
+    },
+    {
+      key: "luisa-vicente",
+      nombre: "Casa LUISA y VICENTE",
+      binId: "PENDIENTE_HOGAR_2",
+      miembros: ["LUISA", "VICENTE"],
+      color: "#2a8a5b",
+    },
+  ],
+};
+function appConfigOK() {
+  return APP_CONFIG.masterKey && !APP_CONFIG.masterKey.startsWith("PENDIENTE")
+    && APP_CONFIG.hogares.every((h) => h.binId && !h.binId.startsWith("PENDIENTE"));
+}
+
 const STORAGE_KEY = "gastos-casa-v1";
 const SESSION_KEY = "gc-session";
+const HOGAR_KEY = "gc-hogar";
 
 const COLORES_MIEMBRO = ["#7a4ec5", "#1f8a5b", "#cf6a3f", "#e6a91a", "#d24773", "#3a7bd5"];
 
@@ -323,13 +350,28 @@ function mostrarLogin() {
   document.body.classList.add("no-user");
   $("#login-screen").classList.remove("hidden");
   $("#app").classList.add("hidden");
+
+  const quick = $("#login-quick");
+  const classic = $("#login-card-classic");
+
+  if (appConfigOK() && quick) {
+    // Pantalla simple: 4 botones por miembro
+    quick.classList.remove("hidden");
+    if (classic) classic.classList.add("hidden");
+    renderLoginQuick();
+    return;
+  }
+
+  // Pantalla clásica (setup + picker)
+  if (quick) quick.classList.add("hidden");
+  if (classic) classic.classList.remove("hidden");
+
   const config = $("#login-config");
   const pick = $("#login-pick");
   const join = $("#login-join");
   if (!state.miembros.length) {
     config.classList.remove("hidden");
     pick.classList.add("hidden");
-    // En el primer arranque (sin miembros), dejamos visible y abierto el "conectar a hogar existente"
     if (join) join.open = false;
   } else {
     config.classList.add("hidden");
@@ -337,6 +379,70 @@ function mostrarLogin() {
     if (join) join.open = false;
     renderLoginMembers();
   }
+}
+
+function renderLoginQuick() {
+  const wrap = $("#login-quick-hogares");
+  if (!wrap) return;
+  wrap.innerHTML = APP_CONFIG.hogares.map((h) => `
+    <div class="quick-hogar" data-hogar-key="${escape(h.key)}">
+      <h2>${escape(h.nombre)}</h2>
+      <div class="quick-miembros">
+        ${h.miembros.map((m, i) => `
+          <button type="button" class="member-btn quick-member-btn" data-hogar-key="${escape(h.key)}" data-miembro="${escape(m)}" style="--c:${escape(h.color)}">
+            <span class="avatar" style="background:${escape(h.color)}">${escape(m.slice(0, 1).toUpperCase())}</span>
+            <span class="nm">${escape(m)}</span>
+          </button>
+        `).join("")}
+      </div>
+    </div>
+  `).join("");
+
+  $("#form-quick-pin").classList.add("hidden");
+  $("#quick-login-err").classList.add("hidden");
+  wrap.querySelectorAll(".quick-member-btn").forEach((b) => {
+    b.addEventListener("click", () => quickPickMember(b.dataset.hogarKey, b.dataset.miembro));
+  });
+}
+
+let _quickPick = null; // { hogarKey, miembroNombre }
+async function quickPickMember(hogarKey, miembroNombre) {
+  const hogar = APP_CONFIG.hogares.find((h) => h.key === hogarKey);
+  if (!hogar) return;
+  _quickPick = { hogarKey, miembroNombre };
+
+  // Si ya estamos en el hogar correcto y tenemos sus miembros, simplemente pedimos PIN
+  const sameHogar = localStorage.getItem(HOGAR_KEY) === hogarKey && state.miembros && state.miembros.length;
+  if (!sameHogar) {
+    // Hay que descargar el bin del hogar
+    syncMasterKey = APP_CONFIG.masterKey;
+    syncCode = hogar.binId;
+    localStorage.setItem(SYNC_KEY_KEY, syncMasterKey);
+    localStorage.setItem(SYNC_CODE_KEY, syncCode);
+    localStorage.setItem(SYNC_AUTO_KEY, "1");
+    syncAuto = true;
+    try {
+      toast("Conectando con " + hogar.nombre + "…");
+      const cloud = await jsonbinGet(hogar.binId);
+      if (!cloud || !cloud.miembros || !cloud.miembros.length) {
+        toast("Ese hogar no está configurado todavía");
+        return;
+      }
+      state = migrarCategorias({ ...defaultData(), ...cloud });
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch {}
+      localStorage.setItem(HOGAR_KEY, hogarKey);
+    } catch (err) {
+      toast("Error al conectar: " + err.message);
+      return;
+    }
+  }
+  // Pedimos PIN
+  $("#quick-login-name").textContent = miembroNombre;
+  $("#form-quick-pin").classList.remove("hidden");
+  $("#quick-login-err").classList.add("hidden");
+  const inp = $("#form-quick-pin input[name=pin]");
+  inp.value = "";
+  setTimeout(() => inp.focus(), 50);
 }
 
 function entrarComo(miembro) {
@@ -388,6 +494,34 @@ $("#btn-login-cancel").addEventListener("click", () => {
   _loginPickedMember = null;
   $("#form-login-pin").classList.add("hidden");
 });
+
+// Login rápido (modo preconfigurado): cancelar y submit
+const _btnQuickCancel = $("#btn-quick-cancel");
+if (_btnQuickCancel) {
+  _btnQuickCancel.addEventListener("click", () => {
+    _quickPick = null;
+    $("#form-quick-pin").classList.add("hidden");
+  });
+}
+const _formQuickPin = $("#form-quick-pin");
+if (_formQuickPin) {
+  _formQuickPin.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!_quickPick) return;
+    const pin = e.target.pin.value.trim();
+    const miembro = state.miembros.find((m) => (m.nombre || "").toUpperCase() === _quickPick.miembroNombre.toUpperCase());
+    if (!miembro) {
+      toast("Miembro no encontrado en el hogar");
+      return;
+    }
+    const h = await hashPin(miembro.id, pin);
+    if (h !== miembro.pinHash) {
+      $("#quick-login-err").classList.remove("hidden");
+      return;
+    }
+    entrarComo(miembro);
+  });
+}
 
 $("#form-login-pin").addEventListener("submit", async (e) => {
   e.preventDefault();
