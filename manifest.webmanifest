@@ -1,0 +1,20 @@
+{
+  "name": "Gastos Casa",
+  "short_name": "Gastos Casa",
+  "description": "Gestión de gastos, ingresos, ahorros e inversiones para parejas.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#25262b",
+  "theme_color": "#25262b",
+  "lang": "es",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

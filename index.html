@@ -1,0 +1,874 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="description" content="Gastos Casa — gestión de gastos, ingresos, ahorros e inversiones para parejas." />
+<meta name="theme-color" content="#25262b" />
+<meta name="color-scheme" content="dark" />
+<title>Gastos Casa</title>
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" type="image/svg+xml" href="icon.svg" />
+<link rel="apple-touch-icon" href="icon.svg" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body class="no-user">
+
+<!-- Pantalla de bienvenida / login -->
+<div id="login-screen" class="login-screen">
+  <div class="login-card">
+    <div class="login-brand">
+      <img src="icon.svg" alt="" class="login-logo" />
+      <h1>Gastos Casa</h1>
+      <p class="muted">Gestión de gastos, ahorros e inversiones en pareja</p>
+    </div>
+
+    <div id="login-config" class="login-section hidden">
+      <h2>Primera configuración</h2>
+      <p class="muted small">Crea los dos miembros de la pareja. Cada uno tendrá su propia sesión y datos personales, pero compartiréis los gastos del hogar.</p>
+      <form id="form-setup" class="form-stack">
+        <div class="form-row two">
+          <label>
+            <span>Nombre miembro 1</span>
+            <input name="nombre1" required placeholder="Ej: Ana" />
+          </label>
+          <label>
+            <span>PIN miembro 1 (4 dígitos)</span>
+            <input name="pin1" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" required placeholder="••••" />
+          </label>
+        </div>
+        <div class="form-row two">
+          <label>
+            <span>Nombre miembro 2</span>
+            <input name="nombre2" required placeholder="Ej: Luis" />
+          </label>
+          <label>
+            <span>PIN miembro 2 (4 dígitos)</span>
+            <input name="pin2" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" required placeholder="••••" />
+          </label>
+        </div>
+        <label>
+          <span>Master Key de JSONBin</span>
+          <input name="masterKey" minlength="20" required placeholder="$2a$10$..." autocomplete="off" />
+          <span class="muted small">Crea cuenta gratis en <strong>jsonbin.io</strong> y copia tu X-MASTER-KEY de API Keys. La misma key en ambos dispositivos.</span>
+        </label>
+        <button type="submit" class="primary big">Crear hogar</button>
+      </form>
+    </div>
+
+    <div id="login-pick" class="login-section">
+      <h2>¿Quién entra?</h2>
+      <div id="login-members" class="login-members"></div>
+      <form id="form-login-pin" class="form-stack hidden">
+        <label>
+          <span>PIN de <strong id="login-name"></strong></span>
+          <input name="pin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" required autofocus placeholder="••••" />
+        </label>
+        <div class="form-row two">
+          <button type="button" id="btn-login-cancel" class="ghost">Atrás</button>
+          <button type="submit" class="primary">Entrar</button>
+        </div>
+        <p id="login-err" class="error hidden">PIN incorrecto</p>
+      </form>
+    </div>
+
+    <details class="login-advanced" id="login-join">
+      <summary>¿Ya tenéis un hogar creado? Conectarme con código de sincronización</summary>
+      <form id="form-join" class="form-stack">
+        <label>
+          <span>Master Key de JSONBin</span>
+          <input name="masterKey" minlength="20" required placeholder="$2a$10$..." autocomplete="off" />
+        </label>
+        <label>
+          <span>Sync code del hogar (Bin ID)</span>
+          <input name="syncCode" minlength="6" required placeholder="ej: 651b...c0a" />
+        </label>
+        <button type="submit" class="primary">Conectar a este hogar</button>
+        <p class="muted small">Ambos campos te los pasa la persona que creó el hogar. Después entrarás con tu PIN.</p>
+      </form>
+    </details>
+  </div>
+</div>
+
+<!-- App principal (oculta hasta hacer login) -->
+<div id="app" class="app hidden">
+
+<header class="topbar">
+  <button class="hamburger" id="btn-hamburger" aria-label="Abrir menú" aria-expanded="false" aria-controls="sidebar">
+    <span></span><span></span><span></span>
+  </button>
+  <div class="brand">
+    <h1>Gastos Casa</h1>
+    <span class="sub" id="brand-sub">Gestión compartida</span>
+  </div>
+  <div class="user-chip" id="user-chip">
+    <span class="user-avatar" id="user-avatar"></span>
+    <span class="user-name" id="user-name"></span>
+    <button type="button" id="btn-logout" class="ghost small">Salir</button>
+  </div>
+</header>
+
+<div class="sidebar-backdrop" id="sidebar-backdrop" aria-hidden="true"></div>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar" aria-label="Navegación principal">
+    <nav class="tabs" id="tabs">
+      <button data-tab="inicio" class="active"><span class="tab-icon" aria-hidden="true">🏠</span><span>Inicio</span></button>
+      <button data-tab="gastos"><span class="tab-icon" aria-hidden="true">💸</span><span>Gastos</span></button>
+      <button data-tab="ingresos"><span class="tab-icon" aria-hidden="true">💰</span><span>Ingresos</span></button>
+      <button data-tab="ahorros"><span class="tab-icon" aria-hidden="true">🎯</span><span>Ahorros</span></button>
+      <button data-tab="inversiones"><span class="tab-icon" aria-hidden="true">📈</span><span>Inversiones</span></button>
+      <button data-tab="cuadre"><span class="tab-icon" aria-hidden="true">⚖️</span><span>Cuadre</span></button>
+      <button data-tab="seguimiento"><span class="tab-icon" aria-hidden="true">📊</span><span>Seguimiento</span></button>
+      <button data-tab="objetivos"><span class="tab-icon" aria-hidden="true">🎯</span><span>Objetivos</span></button>
+      <button data-tab="propuestas"><span class="tab-icon" aria-hidden="true">💡</span><span>Propuestas</span></button>
+      <button data-tab="ajustes"><span class="tab-icon" aria-hidden="true">⚙️</span><span>Ajustes</span></button>
+    </nav>
+    <div class="sync-status-wrap">
+      <span class="dot" id="sync-dot"></span>
+      <span id="sync-status" class="muted small">—</span>
+    </div>
+  </aside>
+
+  <main>
+
+    <!-- INICIO -->
+    <section id="tab-inicio" class="tab active">
+      <div class="grid grid-4">
+        <div class="card stat"><span class="label">Ingresos del mes</span><strong id="kpi-ingresos-mes">0,00 €</strong></div>
+        <div class="card stat"><span class="label">Gastos del mes</span><strong id="kpi-gastos-mes">0,00 €</strong></div>
+        <div class="card stat"><span class="label">Balance del mes</span><strong id="kpi-balance-mes">0,00 €</strong></div>
+        <div class="card stat"><span class="label">Ahorrado total</span><strong id="kpi-ahorrado">0,00 €</strong></div>
+      </div>
+
+      <div class="grid grid-2">
+        <div class="card">
+          <h2>Mis números este mes <span class="muted small" id="kpi-yo-nombre"></span></h2>
+          <table class="tabla compact">
+            <tbody>
+              <tr><td>Mis ingresos</td><td class="num" id="kpi-yo-ing">0,00 €</td></tr>
+              <tr><td>Mis gastos personales</td><td class="num" id="kpi-yo-gas">0,00 €</td></tr>
+              <tr><td>Mi parte de gastos compartidos</td><td class="num" id="kpi-yo-comp">0,00 €</td></tr>
+              <tr><td><strong>Saldo personal</strong></td><td class="num"><strong id="kpi-yo-saldo">0,00 €</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="card">
+          <h2>Cuadre entre vosotros</h2>
+          <div id="cuadre-resumen" class="cuadre-box">
+            <p class="muted">Aún no hay gastos compartidos para cuadrar.</p>
+          </div>
+          <p class="muted small">Detalle en la pestaña <strong>Cuadre</strong>.</p>
+        </div>
+      </div>
+
+      <div class="grid grid-2">
+        <div class="card">
+          <h2>Últimos gastos</h2>
+          <div id="lista-ultimos-gastos" class="list"></div>
+        </div>
+        <div class="card">
+          <h2>Objetivos de ahorro</h2>
+          <div id="lista-ahorros-inicio" class="list"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- GASTOS -->
+    <section id="tab-gastos" class="tab">
+
+      <!-- IMPORTAR EXCEL BANCARIO -->
+      <div class="card import-card">
+        <h2>Importar movimientos del banco</h2>
+        <div id="import-paso-1">
+          <p class="muted small">Sube tu extracto de movimientos en <strong>Excel (.xlsx)</strong> o <strong>CSV</strong>. La app detecta las columnas y separa gastos (importes negativos) de ingresos (positivos).</p>
+          <div class="form-row">
+            <label class="btn-as-label">
+              📂 Elegir archivo
+              <input type="file" id="file-import-banco" accept=".xlsx,.xls,.csv" hidden />
+            </label>
+            <span id="import-fname" class="muted small"></span>
+          </div>
+        </div>
+
+        <div id="import-paso-2" class="hidden">
+          <div id="import-sheet-picker"></div>
+
+          <h3 class="import-h3">Mapeo de columnas <span class="muted small">(detectadas automáticamente, ajústalas si hace falta)</span></h3>
+          <div class="form-row">
+            <label>
+              <span>Fecha</span>
+              <select id="map-fecha"></select>
+            </label>
+            <label>
+              <span>Concepto / descripción</span>
+              <select id="map-concepto"></select>
+            </label>
+            <label>
+              <span>Importe</span>
+              <select id="map-importe"></select>
+            </label>
+            <label>
+              <span>Importe ingresos <span class="muted small">(si está en columna aparte)</span></span>
+              <select id="map-importe-pos"></select>
+            </label>
+          </div>
+
+          <h3 class="import-h3">Asignación por defecto</h3>
+          <div class="form-row">
+            <label>
+              <span>Asignar a (miembro)</span>
+              <select id="imp-miembro"></select>
+            </label>
+            <label>
+              <span>Tipo (para gastos)</span>
+              <select id="imp-tipo">
+                <option value="compartido">Compartido</option>
+                <option value="personal">Personal</option>
+                <option value="inesperado">Inesperado</option>
+              </select>
+            </label>
+            <label>
+              <span>Categoría</span>
+              <select id="imp-cat"></select>
+            </label>
+            <label>
+              <span>Subcategoría</span>
+              <select id="imp-subcat"></select>
+            </label>
+          </div>
+
+          <h3 class="import-h3">Filtros</h3>
+          <div class="form-row">
+            <label>
+              <span>Desde fecha</span>
+              <input type="date" id="imp-desde" />
+            </label>
+            <label>
+              <span>Hasta fecha</span>
+              <input type="date" id="imp-hasta" />
+            </label>
+            <label class="checkbox">
+              <input type="checkbox" id="imp-skip-dup" checked />
+              <span>Desmarcar duplicados automáticamente</span>
+            </label>
+          </div>
+
+          <h3 class="import-h3">Previsualización <span class="muted small" id="imp-counter"></span></h3>
+          <div class="import-preview">
+            <table class="tabla compact">
+              <thead><tr>
+                <th><input type="checkbox" id="imp-toggle-all" checked /></th>
+                <th>Fecha</th>
+                <th>Concepto</th>
+                <th class="num">Importe</th>
+                <th>Tipo</th>
+                <th>Estado</th>
+              </tr></thead>
+              <tbody id="imp-preview-body"></tbody>
+            </table>
+          </div>
+
+          <div class="form-row import-actions">
+            <button type="button" id="btn-imp-cancel" class="ghost">Cancelar</button>
+            <button type="button" id="btn-imp-do" class="primary">Importar seleccionados</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Añadir gasto</h2>
+        <form id="form-gasto" class="form-stack">
+          <div class="form-row">
+            <label class="grow">
+              <span>Descripción</span>
+              <input name="descripcion" required placeholder="Ej: Compra supermercado" />
+            </label>
+            <label>
+              <span>Importe €</span>
+              <input name="importe" type="number" step="0.01" min="0" required />
+            </label>
+            <label>
+              <span>Fecha</span>
+              <input name="fecha" type="date" required />
+            </label>
+          </div>
+          <div class="form-row">
+            <label>
+              <span>Tipo</span>
+              <select name="tipo">
+                <option value="compartido">Compartido (hogar)</option>
+                <option value="personal">Personal (mío)</option>
+                <option value="inesperado">Inesperado</option>
+              </select>
+            </label>
+            <label>
+              <span>Categoría</span>
+              <select name="categoria" id="sel-cat-gasto"></select>
+            </label>
+            <label>
+              <span>Subcategoría</span>
+              <select name="subcategoria" id="sel-subcat-gasto"></select>
+            </label>
+            <label>
+              <span>Pagado por</span>
+              <select name="pagadoPor" id="sel-pagador"></select>
+            </label>
+          </div>
+          <div class="form-row" id="row-reparto">
+            <label class="grow">
+              <span>Reparto (% para cada uno)</span>
+              <div id="reparto-inputs" class="reparto-inputs"></div>
+            </label>
+            <button type="button" id="btn-reparto-igual" class="ghost">50 / 50</button>
+          </div>
+          <label>
+            <span>Nota (opcional)</span>
+            <input name="nota" placeholder="Detalles, recibo, etc." />
+          </label>
+          <div class="form-row">
+            <button type="submit" class="primary">Añadir gasto</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Filtros</h2>
+        <div class="form-row">
+          <label>
+            <span>Mes</span>
+            <input type="month" id="filtro-mes-gasto" />
+          </label>
+          <label>
+            <span>Tipo</span>
+            <select id="filtro-tipo-gasto">
+              <option value="">Todos</option>
+              <option value="compartido">Compartidos</option>
+              <option value="personal">Personales</option>
+              <option value="inesperado">Inesperados</option>
+            </select>
+          </label>
+          <label>
+            <span>Categoría</span>
+            <select id="filtro-cat-gasto">
+              <option value="">Todas</option>
+            </select>
+          </label>
+          <label>
+            <span>Ámbito</span>
+            <select id="filtro-ambito-gasto">
+              <option value="todos">Todos</option>
+              <option value="mios">Solo míos</option>
+            </select>
+          </label>
+          <button type="button" id="btn-limpiar-filtro-gasto" class="ghost">Limpiar</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Listado <span class="muted small" id="suma-gastos"></span></h2>
+        <table class="tabla">
+          <thead><tr>
+            <th>Fecha</th><th>Descripción</th><th>Tipo</th><th>Categoría / Sub</th><th>Pagó</th><th class="num">Importe</th><th></th>
+          </tr></thead>
+          <tbody id="tabla-gastos"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- INGRESOS -->
+    <section id="tab-ingresos" class="tab">
+      <div class="card">
+        <h2>Añadir ingreso</h2>
+        <form id="form-ingreso" class="form-stack">
+          <div class="form-row">
+            <label class="grow">
+              <span>Descripción</span>
+              <input name="descripcion" required placeholder="Ej: Nómina mayo" />
+            </label>
+            <label>
+              <span>Importe €</span>
+              <input name="importe" type="number" step="0.01" min="0" required />
+            </label>
+            <label>
+              <span>Fecha</span>
+              <input name="fecha" type="date" required />
+            </label>
+          </div>
+          <div class="form-row">
+            <label>
+              <span>Categoría</span>
+              <select name="categoria" id="sel-cat-ingreso"></select>
+            </label>
+            <label>
+              <span>Quién lo recibe</span>
+              <select name="miembro" id="sel-miembro-ingreso"></select>
+            </label>
+            <label class="checkbox">
+              <input type="checkbox" name="recurrente" />
+              <span>Recurrente cada mes</span>
+            </label>
+          </div>
+          <label>
+            <span>Nota (opcional)</span>
+            <input name="nota" placeholder="Bonus, extra, etc." />
+          </label>
+          <div class="form-row">
+            <button type="submit" class="primary">Añadir ingreso</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Listado <span class="muted small" id="suma-ingresos"></span></h2>
+        <div class="form-row">
+          <label>
+            <span>Mes</span>
+            <input type="month" id="filtro-mes-ingreso" />
+          </label>
+          <label>
+            <span>Ámbito</span>
+            <select id="filtro-ambito-ingreso">
+              <option value="todos">Todos</option>
+              <option value="mios">Solo míos</option>
+            </select>
+          </label>
+          <button type="button" id="btn-limpiar-filtro-ingreso" class="ghost">Limpiar</button>
+        </div>
+        <table class="tabla">
+          <thead><tr>
+            <th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Quién</th><th class="num">Importe</th><th>Recurrente</th><th></th>
+          </tr></thead>
+          <tbody id="tabla-ingresos"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- AHORROS -->
+    <section id="tab-ahorros" class="tab">
+      <div class="card">
+        <h2>Nuevo objetivo de ahorro</h2>
+        <form id="form-ahorro" class="form-stack">
+          <div class="form-row">
+            <label class="grow">
+              <span>Nombre</span>
+              <input name="nombre" required placeholder="Ej: Vacaciones, Fondo emergencia, Coche" />
+            </label>
+            <label>
+              <span>Objetivo €</span>
+              <input name="objetivo" type="number" step="0.01" min="0" required />
+            </label>
+            <label>
+              <span>Para fecha (opcional)</span>
+              <input name="fechaObjetivo" type="date" />
+            </label>
+          </div>
+          <div class="form-row">
+            <label>
+              <span>Ámbito</span>
+              <select name="ambito" id="sel-ahorro-ambito">
+                <option value="compartido">Compartido (pareja)</option>
+              </select>
+            </label>
+            <label class="grow">
+              <span>Nota</span>
+              <input name="nota" placeholder="Para qué es este ahorro" />
+            </label>
+          </div>
+          <div class="form-row">
+            <button type="submit" class="primary">Crear objetivo</button>
+          </div>
+        </form>
+      </div>
+
+      <div id="lista-ahorros" class="grid grid-2"></div>
+    </section>
+
+    <!-- INVERSIONES -->
+    <section id="tab-inversiones" class="tab">
+      <div class="card">
+        <h2>Añadir inversión</h2>
+        <form id="form-inversion" class="form-stack">
+          <div class="form-row">
+            <label class="grow">
+              <span>Nombre</span>
+              <input name="nombre" required placeholder="Ej: Fondo MSCI World, Acciones X, Cripto Y, Inmueble Z" />
+            </label>
+            <label>
+              <span>Tipo</span>
+              <select name="tipo">
+                <option>Fondo indexado</option>
+                <option>Acciones</option>
+                <option>ETF</option>
+                <option>Renta fija</option>
+                <option>Cripto</option>
+                <option>Inmueble</option>
+                <option>Plan de pensiones</option>
+                <option>Otro</option>
+              </select>
+            </label>
+          </div>
+          <div class="form-row">
+            <label>
+              <span>Cantidad invertida €</span>
+              <input name="invertido" type="number" step="0.01" min="0" required />
+            </label>
+            <label>
+              <span>Valor actual €</span>
+              <input name="valorActual" type="number" step="0.01" min="0" />
+            </label>
+            <label>
+              <span>Fecha</span>
+              <input name="fecha" type="date" required />
+            </label>
+            <label>
+              <span>Ámbito</span>
+              <select name="ambito" id="sel-inv-ambito"></select>
+            </label>
+          </div>
+          <label>
+            <span>Notas (estrategia, plataforma, etc.)</span>
+            <textarea name="notas" rows="2"></textarea>
+          </label>
+          <div class="form-row">
+            <label class="checkbox">
+              <input type="checkbox" name="proyectada" />
+              <span>Es una inversión <strong>planificada / futura</strong> (aún no realizada)</span>
+            </label>
+          </div>
+          <div class="form-row">
+            <button type="submit" class="primary">Añadir inversión</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="grid grid-3">
+        <div class="card stat"><span class="label">Total invertido</span><strong id="kpi-inv-invertido">0,00 €</strong></div>
+        <div class="card stat"><span class="label">Valor actual</span><strong id="kpi-inv-valor">0,00 €</strong></div>
+        <div class="card stat"><span class="label">Ganancia / pérdida</span><strong id="kpi-inv-rend">0,00 €</strong></div>
+      </div>
+
+      <div class="card">
+        <h2>Cartera <span class="muted small">activa</span></h2>
+        <table class="tabla">
+          <thead><tr><th>Nombre</th><th>Tipo</th><th>Ámbito</th><th class="num">Invertido</th><th class="num">Valor</th><th class="num">+/-</th><th>Fecha</th><th></th></tr></thead>
+          <tbody id="tabla-inversiones"></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <h2>Planificadas / futuras</h2>
+        <table class="tabla">
+          <thead><tr><th>Nombre</th><th>Tipo</th><th>Ámbito</th><th class="num">Importe estimado</th><th>Fecha</th><th></th></tr></thead>
+          <tbody id="tabla-inversiones-proy"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- CUADRE -->
+    <section id="tab-cuadre" class="tab">
+      <div class="card">
+        <h2>Cuadre actual</h2>
+        <div id="cuadre-detalle"></div>
+        <p class="muted small">Calculado a partir de los gastos <strong>compartidos</strong>: cada uno asume su porcentaje de reparto. Quien pagó por encima de su parte tiene derecho a recibirla del otro.</p>
+      </div>
+
+      <div class="card">
+        <h2>Registrar liquidación</h2>
+        <p class="muted small">Cuando uno transfiere al otro para saldar deuda, regístralo aquí para que el cuadre se ponga a cero.</p>
+        <form id="form-liquidacion" class="form-stack">
+          <div class="form-row">
+            <label>
+              <span>De</span>
+              <select name="de" id="liq-de"></select>
+            </label>
+            <label>
+              <span>A</span>
+              <select name="a" id="liq-a"></select>
+            </label>
+            <label>
+              <span>Importe €</span>
+              <input name="importe" type="number" step="0.01" min="0" required />
+            </label>
+            <label>
+              <span>Fecha</span>
+              <input name="fecha" type="date" required />
+            </label>
+          </div>
+          <label>
+            <span>Nota</span>
+            <input name="nota" placeholder="Bizum, transferencia, etc." />
+          </label>
+          <div class="form-row">
+            <button type="submit" class="primary">Registrar liquidación</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Historial de liquidaciones</h2>
+        <table class="tabla">
+          <thead><tr><th>Fecha</th><th>De</th><th>A</th><th class="num">Importe</th><th>Nota</th><th></th></tr></thead>
+          <tbody id="tabla-liquidaciones"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- SEGUIMIENTO -->
+    <section id="tab-seguimiento" class="tab">
+
+      <div class="card">
+        <h2>Filtros</h2>
+        <div class="form-row">
+          <label>
+            <span>Tipo de gastos</span>
+            <select id="seg-filtro">
+              <option value="todos">Todos sumados</option>
+              <option value="compartido">Solo compartidos</option>
+              <option value="personal">Solo personales</option>
+              <option value="inesperado">Solo inesperados</option>
+            </select>
+          </label>
+          <label>
+            <span>Ver por</span>
+            <select id="seg-vista">
+              <option value="total">Total</option>
+              <optgroup label="Por categoría" id="seg-vista-cats"></optgroup>
+              <optgroup label="Por miembro" id="seg-vista-miembros"></optgroup>
+            </select>
+          </label>
+          <label>
+            <span>Rango</span>
+            <select id="seg-rango">
+              <option value="6">Últimos 6 meses</option>
+              <option value="12" selected>Últimos 12 meses</option>
+              <option value="24">Últimos 24 meses</option>
+              <option value="all">Todo el histórico</option>
+            </select>
+          </label>
+          <label class="checkbox">
+            <input type="checkbox" id="seg-ingresos" />
+            <span>Mostrar ingresos como segunda línea</span>
+          </label>
+        </div>
+      </div>
+
+      <div class="card seg-card">
+        <h2>Evolutivo mensual <span class="muted small" id="seg-evo-titulo"></span></h2>
+        <div class="chart-wrap">
+          <canvas id="chart-evo"></canvas>
+        </div>
+        <div id="seg-evo-detalle" class="seg-detalle">
+          <p class="muted small">Pulsa un mes en el gráfico para ver el desglose por categoría frente a la media de los 3 meses anteriores.</p>
+        </div>
+      </div>
+
+      <div class="card seg-card">
+        <div class="seg-head">
+          <h2>Objetivo vs Real</h2>
+          <div class="seg-head-controls">
+            <label class="inline">
+              <span>Modo</span>
+              <select id="seg-obj-modo">
+                <option value="gasto">Gasto</option>
+                <option value="ahorro">Ahorro</option>
+              </select>
+            </label>
+            <label class="inline">
+              <span>Mes</span>
+              <select id="seg-obj-mes"></select>
+            </label>
+          </div>
+        </div>
+        <div class="chart-wrap">
+          <canvas id="chart-obj"></canvas>
+        </div>
+        <div id="seg-obj-detalle" class="seg-detalle">
+          <p class="muted small">Pulsa una barra o consulta la tabla para ver las diferencias por concepto.</p>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- OBJETIVOS -->
+    <section id="tab-objetivos" class="tab">
+
+      <div class="card">
+        <h2>Estimaciones mensuales</h2>
+        <p class="muted small">Define cuánto esperas <strong>gastar al mes en total</strong> y cuánto te gustaría <strong>ahorrar al mes</strong>. Estas cifras se comparan con la realidad en la pestaña Seguimiento.</p>
+        <form id="form-obj-mes" class="form-stack">
+          <div class="form-row">
+            <label>
+              <span>Gasto total al mes (€)</span>
+              <input name="gastoMes" type="number" step="1" min="0" placeholder="ej: 2000" />
+            </label>
+            <label>
+              <span>Ahorro mensual (€)</span>
+              <input name="ahorroMes" type="number" step="1" min="0" placeholder="ej: 500" />
+            </label>
+            <button type="submit" class="primary">Guardar</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Techos por categoría</h2>
+        <p class="muted small">Cuánto te quieres permitir gastar al mes en cada categoría. Las que dejes vacías no se compararán.</p>
+        <table class="tabla">
+          <thead><tr><th>Categoría</th><th class="num">Objetivo / mes (€)</th></tr></thead>
+          <tbody id="tabla-obj-cats"></tbody>
+        </table>
+        <div class="form-row obj-suma-row">
+          <span class="muted small">Suma de techos por categoría</span>
+          <strong id="obj-suma" class="num">0,00 €</strong>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- PROPUESTAS -->
+    <section id="tab-propuestas" class="tab">
+      <div class="card">
+        <h2>Nueva propuesta</h2>
+        <p class="muted small">Sugerencias de cosas que te gustaría comprar, hacer o decidir en pareja: una escapada, cambiar de sofá, contratar algo, etc.</p>
+        <form id="form-propuesta" class="form-stack">
+          <div class="form-row">
+            <label class="grow">
+              <span>Título</span>
+              <input name="titulo" required placeholder="Ej: Escapada a Lisboa en otoño" />
+            </label>
+            <label>
+              <span>Importe estimado €</span>
+              <input name="importe" type="number" step="0.01" min="0" />
+            </label>
+          </div>
+          <label>
+            <span>Detalles</span>
+            <textarea name="descripcion" rows="3" placeholder="Por qué te gustaría, opciones, enlaces, etc."></textarea>
+          </label>
+          <div class="form-row">
+            <button type="submit" class="primary">Publicar propuesta</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Propuestas activas</h2>
+        <div id="lista-propuestas" class="list"></div>
+      </div>
+
+      <div class="card">
+        <h2>Cerradas</h2>
+        <div id="lista-propuestas-cerradas" class="list"></div>
+      </div>
+    </section>
+
+    <!-- AJUSTES -->
+    <section id="tab-ajustes" class="tab">
+      <div class="card">
+        <h2>Hogar</h2>
+        <form id="form-hogar" class="form-stack">
+          <div class="form-row">
+            <label class="grow">
+              <span>Nombre del hogar</span>
+              <input name="nombre" placeholder="Ej: Casa de Ana y Luis" />
+            </label>
+            <label>
+              <span>Moneda</span>
+              <select name="moneda">
+                <option value="€">€ Euro</option>
+                <option value="$">$ Dólar</option>
+                <option value="£">£ Libra</option>
+              </select>
+            </label>
+          </div>
+          <div class="form-row">
+            <button type="submit" class="primary">Guardar</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Miembros de la pareja</h2>
+        <table class="tabla">
+          <thead><tr><th>Nombre</th><th>Color</th><th>PIN</th><th></th></tr></thead>
+          <tbody id="tabla-miembros"></tbody>
+        </table>
+        <p class="muted small">Cada miembro tiene su propio PIN. Puedes cambiarlo cuando quieras desde aquí.</p>
+      </div>
+
+      <div class="card">
+        <h2>Categorías de gastos</h2>
+        <p class="muted small">Cada categoría tiene sus propias subcategorías. Edita o añade las que necesites.</p>
+        <div id="cat-gastos-list" class="cat-list"></div>
+        <form id="form-cat-gasto" class="form-row">
+          <input name="cat" required placeholder="Nueva categoría (ej: Mascota)" />
+          <button type="submit">Añadir categoría</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Categorías de ingresos</h2>
+        <div class="chips" id="chips-cat-ingreso"></div>
+        <form id="form-cat-ingreso" class="form-row">
+          <input name="cat" required placeholder="Añadir categoría de ingreso" />
+          <button type="submit">Añadir</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Sincronización en la nube (JSONBin)</h2>
+        <p class="muted small">
+          Los datos del hogar se guardan en <strong>jsonbin.io</strong> en un bin privado.
+          Ambos campos deben coincidir entre vuestros dispositivos.
+        </p>
+        <div class="form-row">
+          <label class="grow">
+            <span>Master Key</span>
+            <input id="sync-master" type="password" autocomplete="off" placeholder="$2a$10$..." />
+          </label>
+          <button type="button" id="btn-sync-save-key" class="primary">Guardar Master Key</button>
+        </div>
+        <div class="form-row">
+          <label class="grow">
+            <span>Sync code (Bin ID)</span>
+            <input id="sync-code" placeholder="ej: 651b...c0a" />
+          </label>
+          <button type="button" id="btn-sync-save-code" class="primary">Guardar Bin ID</button>
+        </div>
+        <div class="form-row">
+          <label class="checkbox">
+            <input type="checkbox" id="chk-sync-auto" />
+            <span>Sincronización automática</span>
+          </label>
+          <button type="button" id="btn-sync-push" class="ghost">Subir ahora</button>
+          <button type="button" id="btn-sync-pull" class="ghost">Bajar ahora</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Datos</h2>
+        <div class="form-row">
+          <button type="button" id="btn-export" class="ghost">Exportar JSON</button>
+          <label class="ghost btn-as-label">
+            Importar JSON
+            <input type="file" accept="application/json" id="file-import" hidden />
+          </label>
+          <button type="button" id="btn-reset" class="danger">Borrar todo</button>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+</div><!-- /#app -->
+
+<div id="toast" class="toast hidden"></div>
+
+<script src="app.js" defer></script>
+</body>
+</html>
