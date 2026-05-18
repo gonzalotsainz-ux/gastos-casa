@@ -425,7 +425,14 @@ async function quickPickMember(hogarKey, miembroNombre) {
       toast("Conectando con " + hogar.nombre + "…");
       const cloud = await jsonbinGet(hogar.binId);
       if (!cloud || !cloud.miembros || !cloud.miembros.length) {
-        toast("Ese hogar no está configurado todavía");
+        // Bin vacío: ofrecemos repararlo creando los miembros sobre el mismo Bin ID
+        if (window.confirm(
+          `El hogar "${hogar.nombre}" está vacío en la nube.\n\n` +
+          `¿Quieres re-crear ahora a ${hogar.miembros.join(" y ")} en este mismo hogar?\n\n` +
+          `Te pediré un PIN de 4 dígitos para cada miembro.`
+        )) {
+          await repararHogar(hogar);
+        }
         return;
       }
       state = migrarCategorias({ ...defaultData(), ...cloud });
@@ -443,6 +450,42 @@ async function quickPickMember(hogarKey, miembroNombre) {
   const inp = $("#form-quick-pin input[name=pin]");
   inp.value = "";
   setTimeout(() => inp.focus(), 50);
+}
+
+async function repararHogar(hogar) {
+  const miembros = [];
+  for (let i = 0; i < hogar.miembros.length; i++) {
+    const nombre = hogar.miembros[i];
+    const pin = window.prompt(`PIN de 4 dígitos para ${nombre}:`);
+    if (pin == null) return;
+    if (!/^\d{4}$/.test(pin)) { toast("PIN inválido"); return; }
+    const id = uid();
+    const pinHash = await hashPin(id, pin);
+    miembros.push({
+      id, nombre, pinHash,
+      color: COLORES_MIEMBRO[i % COLORES_MIEMBRO.length],
+    });
+  }
+  const nuevoState = {
+    ...defaultData(),
+    hogar: { nombre: hogar.nombre, moneda: "€" },
+    miembros,
+    _cloudVersion: Date.now(),
+  };
+  try {
+    syncMasterKey = APP_CONFIG.masterKey;
+    syncCode = hogar.binId;
+    localStorage.setItem(SYNC_KEY_KEY, syncMasterKey);
+    localStorage.setItem(SYNC_CODE_KEY, syncCode);
+    await jsonbinUpdate(hogar.binId, nuevoState);
+    state = nuevoState;
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch {}
+    localStorage.setItem(HOGAR_KEY, hogar.key);
+    toast("Hogar re-creado · pulsa tu nombre para entrar");
+    renderLoginQuick();
+  } catch (err) {
+    toast("Error al re-crear: " + err.message);
+  }
 }
 
 function entrarComo(miembro) {
@@ -1659,10 +1702,12 @@ $("#file-import").addEventListener("change", async (e) => {
 });
 $("#btn-reset").addEventListener("click", () => {
   if (!confirmar("¿Borrar TODOS los datos locales? (No toca la nube)")) return;
+  // Cancelar cualquier push pendiente y NO subir el estado vacío al bin remoto
+  clearTimeout(_pushTimer);
   state = defaultData();
-  save();
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch {}
   renderAll();
-  toast("Datos borrados");
+  toast("Datos locales borrados (la nube se mantiene)");
 });
 
 // ============================================================
