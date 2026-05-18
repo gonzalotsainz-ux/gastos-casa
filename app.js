@@ -8,14 +8,14 @@ const APP_CONFIG = {
     {
       key: "ali-gon",
       nombre: "Casa ALI y GON",
-      binId: "PENDIENTE_HOGAR_1",
+      binId: "6a0b7889ee5a733b12deb8af",
       miembros: ["ALI", "GON"],
       color: "#7a4ec5",
     },
     {
       key: "luisa-vicente",
       nombre: "Casa LUISA y VICENTE",
-      binId: "PENDIENTE_HOGAR_2",
+      binId: "6a0b79df6610dd3ae86801ec",
       miembros: ["LUISA", "VICENTE"],
       color: "#2a8a5b",
     },
