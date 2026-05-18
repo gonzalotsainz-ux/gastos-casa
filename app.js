@@ -552,11 +552,30 @@ if (_formQuickPin) {
     e.preventDefault();
     if (!_quickPick) return;
     const pin = e.target.pin.value.trim();
-    const miembro = state.miembros.find((m) => (m.nombre || "").toUpperCase() === _quickPick.miembroNombre.toUpperCase());
+    const hogar = APP_CONFIG.hogares.find((h) => h.key === _quickPick.hogarKey);
+    const target = _quickPick.miembroNombre.trim().toUpperCase();
+
+    let miembro = state.miembros.find((m) => (m.nombre || "").trim().toUpperCase() === target);
+
+    // Si no lo encuentra en el state local, forzamos re-descarga del bin (puede que el state esté desactualizado)
+    if (!miembro && hogar) {
+      try {
+        const cloud = await jsonbinGet(hogar.binId);
+        if (cloud && cloud.miembros && cloud.miembros.length) {
+          state = migrarCategorias({ ...defaultData(), ...cloud });
+          try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch {}
+          localStorage.setItem(HOGAR_KEY, hogar.key);
+          miembro = state.miembros.find((m) => (m.nombre || "").trim().toUpperCase() === target);
+        }
+      } catch {}
+    }
+
     if (!miembro) {
-      toast("Miembro no encontrado en el hogar");
+      const nombres = state.miembros.map((m) => m.nombre).join(", ") || "(ninguno)";
+      window.alert(`Miembro "${_quickPick.miembroNombre}" no se encuentra.\n\nEn este hogar (${hogar?.nombre || "?"}) hay: ${nombres}\n\nSi los nombres son distintos, dime esos nombres y te lo arreglo.`);
       return;
     }
+
     const h = await hashPin(miembro.id, pin);
     if (h !== miembro.pinHash) {
       $("#quick-login-err").classList.remove("hidden");
