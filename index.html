@@ -72,11 +72,6 @@
             <input name="pin2" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" required placeholder="••••" />
           </label>
         </div>
-        <label>
-          <span>Master Key de JSONBin</span>
-          <input name="masterKey" minlength="20" required placeholder="$2a$10$..." autocomplete="off" />
-          <span class="muted small">Crea cuenta gratis en <strong>jsonbin.io</strong> y copia tu X-MASTER-KEY de API Keys. La misma key en ambos dispositivos.</span>
-        </label>
         <button type="submit" class="primary big">Crear hogar</button>
       </form>
     </div>
@@ -101,15 +96,11 @@
       <summary>¿Ya tenéis un hogar creado? Conectarme con código de sincronización</summary>
       <form id="form-join" class="form-stack">
         <label>
-          <span>Master Key de JSONBin</span>
-          <input name="masterKey" minlength="20" required placeholder="$2a$10$..." autocomplete="off" />
-        </label>
-        <label>
           <span>Sync code del hogar (Bin ID)</span>
           <input name="syncCode" minlength="6" required placeholder="ej: 651b...c0a" />
         </label>
         <button type="submit" class="primary">Conectar a este hogar</button>
-        <p class="muted small">Ambos campos te los pasa la persona que creó el hogar. Después entrarás con tu PIN.</p>
+        <p class="muted small">Te lo pasa la persona que creó el hogar. Después entrarás con tu PIN.</p>
       </form>
     </details>
   </div>

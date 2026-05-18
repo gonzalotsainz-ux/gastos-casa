@@ -3,7 +3,7 @@
 // Configuración fija de la app: las dos casas preconfiguradas.
 // La Master Key y los Bin IDs se rellenan aquí y la app las usa sin pedir al usuario.
 const APP_CONFIG = {
-  masterKey: "PENDIENTE_MASTER_KEY",
+  masterKey: "$2a$10$ySq5tRBeUtQjNtOKtZb9oeISlp5gwoALA1qPytOt7cOmxVUeAY/nK",
   hogares: [
     {
       key: "ali-gon",
@@ -542,13 +542,17 @@ $("#form-setup").addEventListener("submit", async (e) => {
   const n2 = f.nombre2.value.trim();
   const p1 = f.pin1.value.trim();
   const p2 = f.pin2.value.trim();
-  const masterKey = f.masterKey.value.trim();
+  // Si la app tiene Master Key configurada, la usamos automáticamente.
+  // Si no, pedimos al usuario que la introduzca.
+  const masterKey = (APP_CONFIG.masterKey && !APP_CONFIG.masterKey.startsWith("PENDIENTE"))
+    ? APP_CONFIG.masterKey
+    : (f.masterKey ? f.masterKey.value.trim() : "");
   if (!n1 || !n2 || !/^\d{4}$/.test(p1) || !/^\d{4}$/.test(p2)) {
     toast("Revisa nombres y PINs");
     return;
   }
-  if (masterKey.length < 20) {
-    toast("Master Key inválida (debe empezar por $2a$...)");
+  if (!masterKey || masterKey.length < 20) {
+    toast("Falta Master Key");
     return;
   }
   try {
@@ -582,9 +586,11 @@ $("#form-setup").addEventListener("submit", async (e) => {
 
 $("#form-join").addEventListener("submit", async (e) => {
   e.preventDefault();
-  const masterKey = e.target.masterKey.value.trim();
+  const masterKey = (APP_CONFIG.masterKey && !APP_CONFIG.masterKey.startsWith("PENDIENTE"))
+    ? APP_CONFIG.masterKey
+    : (e.target.masterKey ? e.target.masterKey.value.trim() : "");
   const code = e.target.syncCode.value.trim();
-  if (masterKey.length < 20) { toast("Master Key inválida"); return; }
+  if (!masterKey || masterKey.length < 20) { toast("Falta Master Key"); return; }
   if (code.length < 6) { toast("Sync code demasiado corto"); return; }
   syncMasterKey = masterKey;
   syncCode = code;
