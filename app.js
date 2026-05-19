@@ -72,6 +72,8 @@ function migrarCategorias(s) {
 
 let state = load();
 let sessionUserId = sessionStorage.getItem(SESSION_KEY) || null;
+let _modoApp = "comun"; // "comun" | "personal"
+let _miembroActivoId = null; // miembro "registro como" (común) o el logueado (personal)
 
 // ---------- Persistencia ----------
 function load() {
@@ -123,6 +125,24 @@ async function hashPin(memberId, pin) {
   const data = new TextEncoder().encode(`${memberId}:${pin}`);
   const buf = await crypto.subtle.digest("SHA-256", data);
   return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+// ---------- Filtros por modo (común vs personal) ----------
+function gastosDelModo() {
+  if (_modoApp === "comun") return state.gastos.filter((g) => g.tipo === "compartido");
+  return state.gastos.filter((g) => (g.tipo === "personal" || g.tipo === "inesperado") && g.pagadoPor === _miembroActivoId);
+}
+function ingresosDelModo() {
+  if (_modoApp === "comun") return state.ingresos.slice();
+  return state.ingresos.filter((i) => i.miembro === _miembroActivoId);
+}
+function ahorrosDelModo() {
+  if (_modoApp === "comun") return state.ahorros.filter((a) => a.ambito === "compartido");
+  return state.ahorros.filter((a) => a.ambito === _miembroActivoId);
+}
+function inversionesDelModo() {
+  if (_modoApp === "comun") return state.inversiones.filter((i) => i.ambito === "compartido");
+  return state.inversiones.filter((i) => i.ambito === _miembroActivoId);
 }
 
 function getMiembro(id) { return state.miembros.find((m) => m.id === id); }
@@ -385,93 +405,98 @@ function renderLoginQuick() {
   const wrap = $("#login-quick-hogares");
   if (!wrap) return;
   wrap.innerHTML = APP_CONFIG.hogares.map((h) => `
-    <div class="quick-hogar" data-hogar-key="${escape(h.key)}">
-      <h2>${escape(h.nombre)}</h2>
-      <div class="quick-miembros">
-        ${h.miembros.map((m, i) => `
-          <button type="button" class="member-btn quick-member-btn" data-hogar-key="${escape(h.key)}" data-miembro="${escape(m)}" style="--c:${escape(h.color)}">
-            <span class="avatar" style="background:${escape(h.color)}">${escape(m.slice(0, 1).toUpperCase())}</span>
-            <span class="nm">${escape(m)}</span>
-          </button>
-        `).join("")}
-      </div>
-    </div>
+    <button type="button" class="casa-btn" data-hogar-key="${escape(h.key)}" style="--c:${escape(h.color)}">
+      <span class="casa-icon" style="background:${escape(h.color)}">🏠</span>
+      <span class="casa-info">
+        <strong>${escape(h.nombre)}</strong>
+        <span class="muted small">${escape(h.miembros.join(" · "))}</span>
+      </span>
+    </button>
   `).join("");
 
-  $("#form-quick-pin").classList.add("hidden");
-  $("#quick-login-err").classList.add("hidden");
-  wrap.querySelectorAll(".quick-member-btn").forEach((b) => {
-    b.addEventListener("click", () => quickPickMember(b.dataset.hogarKey, b.dataset.miembro));
+  $("#form-pass-casa").classList.add("hidden");
+  $("#pass-casa-err").classList.add("hidden");
+  $("#pass-casa-help").classList.add("hidden");
+  wrap.querySelectorAll(".casa-btn").forEach((b) => {
+    b.addEventListener("click", () => quickPickHogar(b.dataset.hogarKey));
   });
 }
 
-let _quickPick = null; // { hogarKey, miembroNombre }
-async function quickPickMember(hogarKey, miembroNombre) {
+let _hogarSeleccionado = null; // hogar elegido, esperando pass
+
+async function quickPickHogar(hogarKey) {
   const hogar = APP_CONFIG.hogares.find((h) => h.key === hogarKey);
   if (!hogar) return;
-  _quickPick = { hogarKey, miembroNombre };
+  _hogarSeleccionado = hogar;
 
-  // Si ya estamos en el hogar correcto y tenemos sus miembros, simplemente pedimos PIN
-  const sameHogar = localStorage.getItem(HOGAR_KEY) === hogarKey && state.miembros && state.miembros.length;
-  if (!sameHogar) {
-    // Hay que descargar el bin del hogar
-    syncMasterKey = APP_CONFIG.masterKey;
-    syncCode = hogar.binId;
-    localStorage.setItem(SYNC_KEY_KEY, syncMasterKey);
-    localStorage.setItem(SYNC_CODE_KEY, syncCode);
-    localStorage.setItem(SYNC_AUTO_KEY, "1");
-    syncAuto = true;
-    try {
-      toast("Conectando con " + hogar.nombre + "…");
-      const cloud = await jsonbinGet(hogar.binId);
-      const miembrosBin = (cloud && Array.isArray(cloud.miembros)) ? cloud.miembros : [];
-      const esperados = hogar.miembros.map((s) => s.toUpperCase());
-      const nombresBin = miembrosBin.map((m) => (m.nombre || "").trim().toUpperCase());
-      const coincidenTodos = miembrosBin.length > 0 && esperados.every((n) => nombresBin.includes(n));
+  // Descargar bin
+  syncMasterKey = APP_CONFIG.masterKey;
+  syncCode = hogar.binId;
+  localStorage.setItem(SYNC_KEY_KEY, syncMasterKey);
+  localStorage.setItem(SYNC_CODE_KEY, syncCode);
+  localStorage.setItem(SYNC_AUTO_KEY, "1");
+  syncAuto = true;
 
-      if (!coincidenTodos) {
-        const enBin = miembrosBin.length ? miembrosBin.map((m) => m.nombre).join(", ") : "(vacío)";
-        if (window.confirm(
-          `El bin de "${hogar.nombre}" contiene: ${enBin}\n\n` +
-          `Esta casa debería tener: ${hogar.miembros.join(" y ")}\n\n` +
-          `¿Sobrescribir el bin con ${hogar.miembros.join(" y ")}?\n` +
-          `(Si aceptas, te pediré un PIN de 4 dígitos para cada uno.)`
-        )) {
-          await repararHogar(hogar);
-        }
-        return;
+  try {
+    toast("Conectando con " + hogar.nombre + "…");
+    const cloud = await jsonbinGet(hogar.binId);
+    const miembrosBin = (cloud && Array.isArray(cloud.miembros)) ? cloud.miembros : [];
+    const esperados = hogar.miembros.map((s) => s.toUpperCase());
+    const nombresBin = miembrosBin.map((m) => (m.nombre || "").trim().toUpperCase());
+    const coincidenTodos = miembrosBin.length > 0 && esperados.every((n) => nombresBin.includes(n));
+
+    if (!coincidenTodos) {
+      const enBin = miembrosBin.length ? miembrosBin.map((m) => m.nombre).join(", ") : "(vacío)";
+      if (window.confirm(
+        `El bin de "${hogar.nombre}" contiene: ${enBin}\n\n` +
+        `Esta casa debería tener: ${hogar.miembros.join(" y ")}\n\n` +
+        `¿Inicializar el hogar con ${hogar.miembros.join(" y ")}?\n` +
+        `(Te pediré crear la contraseña de la casa.)`
+      )) {
+        await inicializarHogar(hogar);
       }
-      state = migrarCategorias({ ...defaultData(), ...cloud });
-      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch {}
-      localStorage.setItem(HOGAR_KEY, hogarKey);
-    } catch (err) {
-      toast("Error al conectar: " + err.message);
       return;
     }
+    state = migrarCategorias({ ...defaultData(), ...cloud });
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch {}
+    localStorage.setItem(HOGAR_KEY, hogarKey);
+  } catch (err) {
+    toast("Error al conectar: " + err.message);
+    return;
   }
-  // Pedimos PIN
-  $("#quick-login-name").textContent = miembroNombre;
-  $("#form-quick-pin").classList.remove("hidden");
-  $("#quick-login-err").classList.add("hidden");
-  const inp = $("#form-quick-pin input[name=pin]");
-  inp.value = "";
-  setTimeout(() => inp.focus(), 50);
+
+  // Pedir pass de casa
+  mostrarFormPassCasa(hogar);
 }
 
-async function repararHogar(hogar) {
-  const miembros = [];
-  for (let i = 0; i < hogar.miembros.length; i++) {
-    const nombre = hogar.miembros[i];
-    const pin = window.prompt(`PIN de 4 dígitos para ${nombre}:`);
-    if (pin == null) return;
-    if (!/^\d{4}$/.test(pin)) { toast("PIN inválido"); return; }
-    const id = uid();
-    const pinHash = await hashPin(id, pin);
-    miembros.push({
-      id, nombre, pinHash,
-      color: COLORES_MIEMBRO[i % COLORES_MIEMBRO.length],
-    });
+function mostrarFormPassCasa(hogar) {
+  const form = $("#form-pass-casa");
+  $("#pass-casa-nombre").textContent = hogar.nombre;
+  $("#pass-casa-err").classList.add("hidden");
+  const help = $("#pass-casa-help");
+  const submit = $("#btn-pass-casa-submit");
+
+  const tienePass = !!(state.hogar && state.hogar.passCasaHash);
+  if (tienePass) {
+    help.classList.add("hidden");
+    submit.textContent = "Entrar";
+  } else {
+    help.classList.remove("hidden");
+    submit.textContent = "Crear contraseña y entrar";
   }
+  form.classList.remove("hidden");
+  $("#login-quick-hogares").classList.add("hidden");
+  setTimeout(() => form.querySelector("input[name=pass]").focus(), 50);
+}
+
+async function inicializarHogar(hogar) {
+  // Crea miembros con PIN compartido vacío de momento; la pass casa se crea después
+  const miembros = hogar.miembros.map((nombre, i) => ({
+    id: uid(),
+    nombre,
+    pinHash: "",  // se establecerá la primera vez que se entre en Modo Personal
+    color: COLORES_MIEMBRO[i % COLORES_MIEMBRO.length],
+  }));
   const nuevoState = {
     ...defaultData(),
     hogar: { nombre: hogar.nombre, moneda: "€" },
@@ -487,23 +512,177 @@ async function repararHogar(hogar) {
     state = nuevoState;
     try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch {}
     localStorage.setItem(HOGAR_KEY, hogar.key);
-    toast("Hogar re-creado · pulsa tu nombre para entrar");
-    renderLoginQuick();
+    toast("Hogar inicializado · ahora crea la contraseña");
+    mostrarFormPassCasa(hogar);
   } catch (err) {
-    toast("Error al re-crear: " + err.message);
+    toast("Error al inicializar: " + err.message);
   }
 }
 
-function entrarComo(miembro) {
+// Submit form pass casa
+const _formPassCasa = $("#form-pass-casa");
+if (_formPassCasa) {
+  _formPassCasa.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!_hogarSeleccionado) return;
+    const pass = e.target.pass.value.trim();
+    if (!/^\d{4}$/.test(pass)) { toast("Contraseña debe ser 4 dígitos"); return; }
+    const hash = await hashPin("casa:" + _hogarSeleccionado.key, pass);
+    const tienePass = !!(state.hogar && state.hogar.passCasaHash);
+    if (tienePass) {
+      if (hash !== state.hogar.passCasaHash) {
+        $("#pass-casa-err").classList.remove("hidden");
+        return;
+      }
+    } else {
+      // Crear pass
+      state.hogar.passCasaHash = hash;
+      save(); // sube al bin
+    }
+    entrarEnHogar(_hogarSeleccionado);
+  });
+}
+
+const _btnPassCancel = $("#btn-pass-casa-cancel");
+if (_btnPassCancel) {
+  _btnPassCancel.addEventListener("click", () => {
+    _hogarSeleccionado = null;
+    $("#form-pass-casa").classList.add("hidden");
+    $("#login-quick-hogares").classList.remove("hidden");
+  });
+}
+
+function entrarEnHogar(hogar) {
+  // Entra a Modo Común. miembro activo = el último usado o el primero
+  const lastMember = localStorage.getItem("gc-last-miembro-" + hogar.key);
+  const miembro = state.miembros.find((m) => m.id === lastMember) || state.miembros[0];
+  _miembroActivoId = miembro.id;
+  _modoApp = "comun";
   sessionUserId = miembro.id;
   sessionStorage.setItem(SESSION_KEY, miembro.id);
   document.body.classList.remove("no-user");
+  document.body.classList.add("modo-comun");
+  document.body.classList.remove("modo-personal");
   $("#login-screen").classList.add("hidden");
   $("#app").classList.remove("hidden");
-  $("#user-name").textContent = miembro.nombre;
-  $("#user-avatar").textContent = miembro.nombre.slice(0, 1).toUpperCase();
-  $("#user-avatar").style.background = miembro.color;
-  $("#brand-sub").textContent = state.hogar.nombre || "Gestión compartida";
+  renderHeaderModo();
+  renderAll();
+}
+
+function renderHeaderModo() {
+  const sub = $("#brand-sub");
+  if (sub) sub.textContent = state.hogar.nombre || "Hogar";
+  const badge = $("#modo-badge");
+  if (badge) {
+    badge.textContent = _modoApp === "comun" ? "Común" : "Personal";
+    badge.className = "modo-badge " + (_modoApp === "comun" ? "modo-comun-badge" : "modo-personal-badge");
+  }
+  const sel = $("#sel-registro-como");
+  if (sel) {
+    sel.innerHTML = state.miembros.map((m) => `<option value="${escape(m.id)}" ${m.id === _miembroActivoId ? "selected" : ""}>soy ${escape(m.nombre)}</option>`).join("");
+    sel.classList.toggle("hidden", _modoApp !== "comun");
+  }
+  const btnPers = $("#btn-modo-personal");
+  const btnCom = $("#btn-modo-comun");
+  if (btnPers && btnCom) {
+    btnPers.classList.toggle("hidden", _modoApp !== "comun");
+    btnCom.classList.toggle("hidden", _modoApp !== "personal");
+  }
+}
+
+// Cambio de miembro activo en común
+const _selRegistro = $("#sel-registro-como");
+if (_selRegistro) {
+  _selRegistro.addEventListener("change", (e) => {
+    _miembroActivoId = e.target.value;
+    sessionUserId = _miembroActivoId;
+    const hogarKey = localStorage.getItem(HOGAR_KEY);
+    if (hogarKey) localStorage.setItem("gc-last-miembro-" + hogarKey, _miembroActivoId);
+    renderHeaderModo();
+    renderAll();
+  });
+}
+
+// Entrar Modo Personal: pide PIN
+const _btnModoPersonal = $("#btn-modo-personal");
+if (_btnModoPersonal) {
+  _btnModoPersonal.addEventListener("click", () => {
+    const miembro = state.miembros.find((m) => m.id === _miembroActivoId);
+    if (!miembro) return;
+    $("#modal-pin-nombre").textContent = miembro.nombre;
+    $("#modal-pin-err").classList.add("hidden");
+    const help = $("#modal-pin-help");
+    const sub = $("#form-modal-pin button[type=submit]");
+    if (!miembro.pinHash) {
+      help.classList.remove("hidden");
+      sub.textContent = "Crear y entrar";
+    } else {
+      help.classList.add("hidden");
+      sub.textContent = "Entrar";
+    }
+    $("#modal-pin").classList.remove("hidden");
+    const inp = $("#form-modal-pin input[name=pin]");
+    inp.value = "";
+    setTimeout(() => inp.focus(), 50);
+  });
+}
+
+const _btnModoComun = $("#btn-modo-comun");
+if (_btnModoComun) {
+  _btnModoComun.addEventListener("click", () => {
+    _modoApp = "comun";
+    document.body.classList.add("modo-comun");
+    document.body.classList.remove("modo-personal");
+    renderHeaderModo();
+    renderAll();
+  });
+}
+
+// Submit modal PIN
+const _formModalPin = $("#form-modal-pin");
+if (_formModalPin) {
+  _formModalPin.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const pin = e.target.pin.value.trim();
+    if (!/^\d{4}$/.test(pin)) { toast("PIN debe ser 4 dígitos"); return; }
+    const miembro = state.miembros.find((m) => m.id === _miembroActivoId);
+    if (!miembro) return;
+    const hash = await hashPin(miembro.id, pin);
+    if (!miembro.pinHash) {
+      // Crear PIN nuevo
+      miembro.pinHash = hash;
+      save();
+    } else if (hash !== miembro.pinHash) {
+      $("#modal-pin-err").classList.remove("hidden");
+      return;
+    }
+    _modoApp = "personal";
+    document.body.classList.remove("modo-comun");
+    document.body.classList.add("modo-personal");
+    $("#modal-pin").classList.add("hidden");
+    renderHeaderModo();
+    renderAll();
+  });
+}
+const _btnModalCancel = $("#btn-modal-pin-cancel");
+if (_btnModalCancel) {
+  _btnModalCancel.addEventListener("click", () => {
+    $("#modal-pin").classList.add("hidden");
+  });
+}
+
+function entrarComo(miembro) {
+  // Entra a la app en modo Común con el miembro activo dado
+  _miembroActivoId = miembro.id;
+  _modoApp = "comun";
+  sessionUserId = miembro.id;
+  sessionStorage.setItem(SESSION_KEY, miembro.id);
+  document.body.classList.remove("no-user");
+  document.body.classList.add("modo-comun");
+  document.body.classList.remove("modo-personal");
+  $("#login-screen").classList.add("hidden");
+  $("#app").classList.remove("hidden");
+  renderHeaderModo();
   renderAll();
 }
 
@@ -784,8 +963,22 @@ function preparaFormGasto() {
   catSel.innerHTML = state.catGastos.map((c) => `<option>${escape(c.cat)}</option>`).join("");
   actualizarSubcats(catSel, subSel);
   catSel.onchange = () => actualizarSubcats(catSel, subSel);
-  $("#sel-pagador").innerHTML = state.miembros.map((m) => `<option value="${escape(m.id)}" ${m.id === sessionUserId ? "selected" : ""}>${escape(m.nombre)}</option>`).join("");
-  renderRepartoInputs(repartoPorDefecto(), "compartido");
+
+  // Tipo según modo
+  if (_modoApp === "comun") {
+    f.tipo.innerHTML = `<option value="compartido">Compartido (hogar)</option>`;
+  } else {
+    f.tipo.innerHTML = `<option value="personal">Personal (mío)</option><option value="inesperado">Inesperado</option>`;
+  }
+
+  // Pagador: en común permite elegir, en personal es el miembro activo
+  if (_modoApp === "comun") {
+    $("#sel-pagador").innerHTML = state.miembros.map((m) => `<option value="${escape(m.id)}" ${m.id === _miembroActivoId ? "selected" : ""}>${escape(m.nombre)}</option>`).join("");
+  } else {
+    const yo = getMiembro(_miembroActivoId);
+    $("#sel-pagador").innerHTML = yo ? `<option value="${escape(yo.id)}" selected>${escape(yo.nombre)}</option>` : "";
+  }
+  renderRepartoInputs(repartoPorDefecto(), _modoApp === "comun" ? "compartido" : "personal");
 
   // Filtro de categoría
   const filtroCat = $("#filtro-cat-gasto");
@@ -839,20 +1032,15 @@ $("#form-gasto").addEventListener("submit", (e) => {
 
 function gastosFiltrados() {
   const mes = $("#filtro-mes-gasto").value;
-  const tipo = $("#filtro-tipo-gasto").value;
+  const tipo = $("#filtro-tipo-gasto") ? $("#filtro-tipo-gasto").value : "";
   const cat = $("#filtro-cat-gasto") ? $("#filtro-cat-gasto").value : "";
-  const amb = $("#filtro-ambito-gasto").value;
-  return state.gastos
+  return gastosDelModo()
     .slice()
     .sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""))
     .filter((g) => {
       if (mes && mesISO(g.fecha) !== mes) return false;
       if (tipo && g.tipo !== tipo) return false;
       if (cat && g.categoria !== cat) return false;
-      if (amb === "mios") {
-        const tocaAmi = g.pagadoPor === sessionUserId || (g.reparto && (g.reparto[sessionUserId] || 0) > 0);
-        if (!tocaAmi) return false;
-      }
       return true;
     });
 }
@@ -902,7 +1090,12 @@ function preparaFormIngreso() {
   const f = $("#form-ingreso");
   f.fecha.value = hoyISO();
   $("#sel-cat-ingreso").innerHTML = state.catIngresos.map((c) => `<option>${escape(c)}</option>`).join("");
-  $("#sel-miembro-ingreso").innerHTML = state.miembros.map((m) => `<option value="${escape(m.id)}" ${m.id === sessionUserId ? "selected" : ""}>${escape(m.nombre)}</option>`).join("");
+  if (_modoApp === "comun") {
+    $("#sel-miembro-ingreso").innerHTML = state.miembros.map((m) => `<option value="${escape(m.id)}" ${m.id === _miembroActivoId ? "selected" : ""}>${escape(m.nombre)}</option>`).join("");
+  } else {
+    const yo = getMiembro(_miembroActivoId);
+    $("#sel-miembro-ingreso").innerHTML = yo ? `<option value="${escape(yo.id)}" selected>${escape(yo.nombre)}</option>` : "";
+  }
 }
 
 $("#form-ingreso").addEventListener("submit", (e) => {
@@ -930,13 +1123,11 @@ $("#form-ingreso").addEventListener("submit", (e) => {
 
 function ingresosFiltrados() {
   const mes = $("#filtro-mes-ingreso").value;
-  const amb = $("#filtro-ambito-ingreso").value;
-  return state.ingresos
+  return ingresosDelModo()
     .slice()
     .sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""))
     .filter((i) => {
       if (mes && mesISO(i.fecha) !== mes) return false;
-      if (amb === "mios" && i.miembro !== sessionUserId) return false;
       return true;
     });
 }
@@ -981,8 +1172,12 @@ $("#btn-limpiar-filtro-ingreso").addEventListener("click", () => {
 // ============================================================
 function preparaFormAhorro() {
   const sel = $("#sel-ahorro-ambito");
-  sel.innerHTML = `<option value="compartido">Compartido (pareja)</option>` +
-    state.miembros.map((m) => `<option value="${escape(m.id)}">Personal de ${escape(m.nombre)}</option>`).join("");
+  if (_modoApp === "comun") {
+    sel.innerHTML = `<option value="compartido">Compartido (pareja)</option>`;
+  } else {
+    const yo = getMiembro(_miembroActivoId);
+    sel.innerHTML = yo ? `<option value="${escape(yo.id)}" selected>Personal de ${escape(yo.nombre)}</option>` : "";
+  }
 }
 
 $("#form-ahorro").addEventListener("submit", (e) => {
@@ -1013,11 +1208,12 @@ function ahorroAcumulado(a) {
 
 function renderAhorros() {
   const wrap = $("#lista-ahorros");
-  if (!state.ahorros.length) {
-    wrap.innerHTML = `<div class="card muted">Aún no hay objetivos de ahorro.</div>`;
+  const ahorrosVisibles = ahorrosDelModo();
+  if (!ahorrosVisibles.length) {
+    wrap.innerHTML = `<div class="card muted">Aún no hay objetivos de ahorro ${_modoApp === "personal" ? "personales" : "compartidos"}.</div>`;
     return;
   }
-  wrap.innerHTML = state.ahorros.map((a) => {
+  wrap.innerHTML = ahorrosVisibles.map((a) => {
     const acum = ahorroAcumulado(a);
     const pct = a.objetivo > 0 ? Math.min(100, Math.round((acum / a.objetivo) * 100)) : 0;
     const ambitoLbl = a.ambito === "compartido" ? "Compartido" : `Personal · ${escape(nombreMiembro(a.ambito))}`;
@@ -1108,8 +1304,12 @@ function renderAhorros() {
 function preparaFormInversion() {
   const f = $("#form-inversion");
   f.fecha.value = hoyISO();
-  $("#sel-inv-ambito").innerHTML = `<option value="compartido">Compartida (pareja)</option>` +
-    state.miembros.map((m) => `<option value="${escape(m.id)}">Personal de ${escape(m.nombre)}</option>`).join("");
+  if (_modoApp === "comun") {
+    $("#sel-inv-ambito").innerHTML = `<option value="compartido">Compartida (pareja)</option>`;
+  } else {
+    const yo = getMiembro(_miembroActivoId);
+    $("#sel-inv-ambito").innerHTML = yo ? `<option value="${escape(yo.id)}" selected>Personal de ${escape(yo.nombre)}</option>` : "";
+  }
 }
 
 $("#form-inversion").addEventListener("submit", (e) => {
@@ -1136,8 +1336,9 @@ $("#form-inversion").addEventListener("submit", (e) => {
 });
 
 function renderInversiones() {
-  const activas = state.inversiones.filter((i) => !i.proyectada);
-  const proy = state.inversiones.filter((i) => i.proyectada);
+  const visibles = inversionesDelModo();
+  const activas = visibles.filter((i) => !i.proyectada);
+  const proy = visibles.filter((i) => i.proyectada);
   let totalInv = 0, totalValor = 0;
   $("#tabla-inversiones").innerHTML = activas.length ? activas.map((i) => {
     const valor = i.valorActual ?? i.invertido;
@@ -1467,8 +1668,8 @@ function enlazarPropuestaHandlers() {
 // ============================================================
 function renderInicio() {
   const mes = mesActualISO();
-  const ingMes = state.ingresos.filter((i) => mesISO(i.fecha) === mes);
-  const gasMes = state.gastos.filter((g) => mesISO(g.fecha) === mes);
+  const ingMes = ingresosDelModo().filter((i) => mesISO(i.fecha) === mes);
+  const gasMes = gastosDelModo().filter((g) => mesISO(g.fecha) === mes);
   const ingTotal = ingMes.reduce((a, b) => a + (Number(b.importe) || 0), 0);
   const gasTotal = gasMes.reduce((a, b) => a + (Number(b.importe) || 0), 0);
   $("#kpi-ingresos-mes").textContent = fmtMoney(ingTotal);
@@ -1479,7 +1680,7 @@ function renderInicio() {
   balEl.classList.toggle("pos", bal >= 0);
   balEl.classList.toggle("neg", bal < 0);
 
-  const ahorrado = state.ahorros.reduce((acc, a) => acc + ahorroAcumulado(a), 0);
+  const ahorrado = ahorrosDelModo().reduce((acc, a) => acc + ahorroAcumulado(a), 0);
   $("#kpi-ahorrado").textContent = fmtMoney(ahorrado);
 
   // Mis números
@@ -1507,7 +1708,7 @@ function renderInicio() {
     : `<p class="muted">Todo cuadrado ✓</p>`;
 
   // Últimos gastos
-  const recientes = state.gastos.slice().sort((a, b) => (b.fecha || "").localeCompare(a.fecha || "")).slice(0, 6);
+  const recientes = gastosDelModo().slice().sort((a, b) => (b.fecha || "").localeCompare(a.fecha || "")).slice(0, 6);
   $("#lista-ultimos-gastos").innerHTML = recientes.length ? recientes.map((g) => `
     <div class="row-item">
       <span class="chip" style="--c:${escape(getMiembro(g.pagadoPor)?.color || "#888")}">${escape(nombreMiembro(g.pagadoPor))}</span>
@@ -1520,7 +1721,8 @@ function renderInicio() {
   `).join("") : `<p class="muted">Sin movimientos.</p>`;
 
   // Ahorros en inicio
-  $("#lista-ahorros-inicio").innerHTML = state.ahorros.length ? state.ahorros.slice(0, 4).map((a) => {
+  const ahorrosListados = ahorrosDelModo();
+  $("#lista-ahorros-inicio").innerHTML = ahorrosListados.length ? ahorrosListados.slice(0, 4).map((a) => {
     const acum = ahorroAcumulado(a);
     const pct = a.objetivo > 0 ? Math.min(100, Math.round((acum / a.objetivo) * 100)) : 0;
     return `<div class="row-item col">
@@ -2826,11 +3028,14 @@ function renderAll() {
 setupTabs();
 
 // Si ya teníamos sesión y miembros → entrar directo
-const yoStored = sessionUserId ? getMiembro(sessionUserId) : null;
-if (yoStored) {
-  entrarComo(yoStored);
-} else {
+// Si la app tiene las 2 casas preconfiguradas, siempre mostramos el login (pide pass casa).
+// Si no, intentamos auto-login con la sesión guardada (modo clásico).
+if (appConfigOK()) {
   mostrarLogin();
+} else {
+  const yoStored = sessionUserId ? getMiembro(sessionUserId) : null;
+  if (yoStored) entrarComo(yoStored);
+  else mostrarLogin();
 }
 
 // Arrancar sync si hay código

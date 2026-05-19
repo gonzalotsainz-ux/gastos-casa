@@ -217,8 +217,54 @@ h3 { font-size: .82rem; color: var(--ink-soft); font-weight: 500; }
   box-shadow: 0 0 0 1px rgba(255,255,255,0.08), inset 0 1px 0 rgba(255,255,255,0.12);
 }
 .member-btn .nm { font-weight: 500; }
-/* Login simplificado: 2 hogares × 2 miembros */
+/* Login simplificado: 2 botones de casa */
 .login-quick { max-width: 520px; }
+.casa-list {
+  display: flex; flex-direction: column; gap: 12px;
+  margin: 16px 0 8px;
+}
+.casa-btn {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 18px 18px;
+  cursor: pointer;
+  display: flex; align-items: center; gap: 14px;
+  font-family: inherit;
+  color: var(--ink);
+  transition: all var(--t) var(--ease);
+  text-align: left;
+  width: 100%;
+  min-height: 72px;
+  position: relative;
+}
+.casa-btn::before {
+  content: "";
+  position: absolute;
+  left: 0; top: 0; bottom: 0;
+  width: 4px;
+  background: var(--c, var(--brand));
+  border-radius: 4px 0 0 4px;
+}
+.casa-btn:hover {
+  background: var(--surface-3);
+  border-color: var(--line-bright);
+  transform: translateY(-1px);
+  box-shadow: none;
+}
+.casa-icon {
+  width: 48px; height: 48px;
+  border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.4rem;
+  flex-shrink: 0;
+}
+.casa-info {
+  flex: 1; display: flex; flex-direction: column; gap: 2px;
+}
+.casa-info strong { font-weight: 600; font-size: 1rem; }
+
+
 .quick-hogar {
   margin: 22px 0;
   padding: 18px 16px;
@@ -344,13 +390,41 @@ h3 { font-size: .82rem; color: var(--ink-soft); font-weight: 500; }
   width: 16px; height: 1.5px; border-radius: 1px;
 }
 .user-chip {
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center; gap: 8px;
   background: var(--surface-2);
   border: 1px solid var(--line);
   border-radius: 999px;
-  padding: 4px 6px 4px 4px;
+  padding: 4px 8px 4px 8px;
   flex-shrink: 0;
 }
+.modo-badge {
+  font-size: .68rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  color: var(--ink-soft);
+  border: 1px solid var(--line);
+}
+.modo-comun-badge { background: var(--brand-soft); color: var(--brand); border-color: rgba(228, 229, 233, 0.25); }
+.modo-personal-badge { background: var(--warn-soft); color: var(--warn); border-color: var(--warn-line); }
+.sel-registro {
+  background: transparent;
+  border: none;
+  color: var(--ink-soft);
+  font-size: .82rem;
+  font-weight: 500;
+  padding: 4px 8px;
+  min-height: 28px;
+  cursor: pointer;
+  min-width: 0;
+  width: auto;
+  font-family: inherit;
+}
+.sel-registro:hover { background: var(--surface-3); color: var(--ink); }
+.sel-registro:focus { outline: 1px solid var(--brand-soft); box-shadow: none; }
 .user-avatar {
   width: 28px; height: 28px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
@@ -1234,6 +1308,43 @@ details summary:hover { color: var(--ink-soft); }
   .import-actions { justify-content: stretch; }
   .import-actions button { flex: 1; min-width: 0; }
 }
+
+/* ============= Modal (PIN zona personal) ============= */
+.modal-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  z-index: 150;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.modal-card {
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-lg);
+  padding: 26px 24px;
+  max-width: 360px;
+  width: 100%;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+}
+.modal-card h2 {
+  margin: 0 0 8px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  text-transform: none;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+.modal-card .form-stack { margin-top: 16px; }
+
+/* ============= Ocultar pestañas en modo personal ============= */
+body.modo-personal #tabs button[data-tab="cuadre"],
+body.modo-personal #tabs button[data-tab="seguimiento"],
+body.modo-personal #tabs button[data-tab="objetivos"],
+body.modo-personal #tabs button[data-tab="propuestas"],
+body.modo-personal #tabs button[data-tab="ajustes"] { display: none; }
+body.modo-personal .solo-comun { display: none !important; }
+body.modo-comun .solo-personal { display: none !important; }
 
 /* ============= Toast ============= */
 .toast {

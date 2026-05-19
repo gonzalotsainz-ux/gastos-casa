@@ -20,24 +20,25 @@
 <!-- Pantalla de bienvenida / login -->
 <div id="login-screen" class="login-screen">
 
-  <!-- Pantalla SIMPLE (preconfigurada): 4 botones por miembro de los 2 hogares -->
+  <!-- Pantalla SIMPLE: 2 botones de casa + pass de casa -->
   <div id="login-quick" class="login-card login-quick hidden">
     <div class="login-brand">
       <img src="icon.svg" alt="" class="login-logo" />
       <h1>Gastos Casa</h1>
-      <p class="muted">Pulsa tu nombre para entrar</p>
+      <p class="muted" id="login-quick-sub">Elige tu casa</p>
     </div>
-    <div id="login-quick-hogares"></div>
-    <form id="form-quick-pin" class="form-stack hidden">
+    <div id="login-quick-hogares" class="casa-list"></div>
+    <form id="form-pass-casa" class="form-stack hidden">
+      <p id="pass-casa-help" class="muted small hidden">Primera vez en esta casa. Crea una contraseña de 4 dígitos para entrar a partir de ahora.</p>
       <label>
-        <span>PIN de <strong id="quick-login-name"></strong></span>
-        <input name="pin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" required autofocus placeholder="••••" />
+        <span>Contraseña de <strong id="pass-casa-nombre"></strong></span>
+        <input name="pass" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" required autofocus placeholder="••••" />
       </label>
       <div class="form-row two">
-        <button type="button" id="btn-quick-cancel" class="ghost">Atrás</button>
-        <button type="submit" class="primary">Entrar</button>
+        <button type="button" id="btn-pass-casa-cancel" class="ghost">Atrás</button>
+        <button type="submit" class="primary" id="btn-pass-casa-submit">Entrar</button>
       </div>
-      <p id="quick-login-err" class="error hidden">PIN incorrecto</p>
+      <p id="pass-casa-err" class="error hidden">Contraseña incorrecta</p>
     </form>
   </div>
 
@@ -118,9 +119,11 @@
     <span class="sub" id="brand-sub">Gestión compartida</span>
   </div>
   <div class="user-chip" id="user-chip">
-    <span class="user-avatar" id="user-avatar"></span>
-    <span class="user-name" id="user-name"></span>
-    <button type="button" id="btn-logout" class="ghost small">Salir</button>
+    <span class="modo-badge" id="modo-badge">Común</span>
+    <select id="sel-registro-como" class="sel-registro" title="Estoy registrando como…"></select>
+    <button type="button" id="btn-modo-personal" class="ghost small">🔒 Mi zona</button>
+    <button type="button" id="btn-modo-comun" class="ghost small hidden">← Común</button>
+    <button type="button" id="btn-logout" class="ghost small" title="Cerrar sesión">⎋</button>
   </div>
 </header>
 
@@ -157,7 +160,7 @@
         <div class="card stat"><span class="label">Ahorrado total</span><strong id="kpi-ahorrado">0,00 €</strong></div>
       </div>
 
-      <div class="grid grid-2">
+      <div class="grid grid-2 solo-comun">
         <div class="card">
           <h2>Mis números este mes <span class="muted small" id="kpi-yo-nombre"></span></h2>
           <table class="tabla compact">
@@ -879,6 +882,26 @@
 </div>
 
 </div><!-- /#app -->
+
+<!-- Modal PIN para zona personal -->
+<div id="modal-pin" class="modal-backdrop hidden">
+  <div class="modal-card">
+    <h2>Entrar a tu zona personal</h2>
+    <p class="muted small">PIN de 4 dígitos de <strong id="modal-pin-nombre"></strong>. Si es tu primera vez en personal, crea uno.</p>
+    <p id="modal-pin-help" class="muted small hidden">Primera vez. Este PIN será el tuyo a partir de ahora.</p>
+    <form id="form-modal-pin" class="form-stack">
+      <label>
+        <span>PIN</span>
+        <input name="pin" type="password" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" required placeholder="••••" />
+      </label>
+      <div class="form-row two">
+        <button type="button" id="btn-modal-pin-cancel" class="ghost">Cancelar</button>
+        <button type="submit" class="primary">Entrar</button>
+      </div>
+      <p id="modal-pin-err" class="error hidden">PIN incorrecto</p>
+    </form>
+  </div>
+</div>
 
 <div id="toast" class="toast hidden"></div>
 
