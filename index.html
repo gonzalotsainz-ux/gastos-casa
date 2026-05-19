@@ -134,7 +134,7 @@
     <nav class="tabs" id="tabs">
       <button data-tab="inicio" class="active"><span class="tab-icon" aria-hidden="true">🏠</span><span>Inicio</span></button>
       <button data-tab="gastos"><span class="tab-icon" aria-hidden="true">💸</span><span>Gastos</span></button>
-      <button data-tab="ingresos"><span class="tab-icon" aria-hidden="true">💰</span><span>Ingresos</span></button>
+      <button data-tab="ingresos" class="solo-personal"><span class="tab-icon" aria-hidden="true">💰</span><span>Ingresos</span></button>
       <button data-tab="ahorros"><span class="tab-icon" aria-hidden="true">🎯</span><span>Ahorros</span></button>
       <button data-tab="inversiones"><span class="tab-icon" aria-hidden="true">📈</span><span>Inversiones</span></button>
       <button data-tab="cuadre"><span class="tab-icon" aria-hidden="true">⚖️</span><span>Cuadre</span></button>
@@ -400,7 +400,7 @@
     </section>
 
     <!-- INGRESOS -->
-    <section id="tab-ingresos" class="tab">
+    <section id="tab-ingresos" class="tab solo-personal">
       <div class="card">
         <h2>Añadir ingreso</h2>
         <form id="form-ingreso" class="form-stack">
@@ -809,6 +809,17 @@
           <tbody id="tabla-miembros"></tbody>
         </table>
         <p class="muted small">Cada miembro tiene su propio PIN. Puedes cambiarlo cuando quieras desde aquí.</p>
+      </div>
+
+      <div class="card">
+        <h2>Reparto de gastos compartidos</h2>
+        <p class="muted small">Porcentaje que asume cada miembro por defecto en los gastos compartidos del hogar. La suma debe ser 100%.</p>
+        <form id="form-reparto-default" class="form-stack">
+          <div id="reparto-default-inputs" class="reparto-inputs"></div>
+          <div class="form-row">
+            <button type="submit" class="primary">Guardar reparto</button>
+          </div>
+        </form>
       </div>
 
       <div class="card">

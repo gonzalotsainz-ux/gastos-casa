@@ -128,9 +128,25 @@ async function hashPin(memberId, pin) {
 }
 
 // ---------- Filtros por modo (común vs personal) ----------
+function esRepartoCompartido(reparto) {
+  if (!reparto) return false;
+  const valores = Object.values(reparto).filter((v) => Number(v) > 0);
+  return valores.length > 1;
+}
+
 function gastosDelModo() {
-  if (_modoApp === "comun") return state.gastos.filter((g) => g.tipo === "compartido");
-  return state.gastos.filter((g) => (g.tipo === "personal" || g.tipo === "inesperado") && g.pagadoPor === _miembroActivoId);
+  if (_modoApp === "comun") {
+    return state.gastos.filter((g) =>
+      g.tipo === "compartido" ||
+      (g.tipo === "inesperado" && esRepartoCompartido(g.reparto))
+    );
+  }
+  return state.gastos.filter((g) =>
+    g.pagadoPor === _miembroActivoId && (
+      g.tipo === "personal" ||
+      (g.tipo === "inesperado" && !esRepartoCompartido(g.reparto))
+    )
+  );
 }
 function ingresosDelModo() {
   if (_modoApp === "comun") return state.ingresos.slice();
@@ -901,6 +917,17 @@ function setupTabs() {
 function repartoPorDefecto() {
   const ms = state.miembros;
   if (!ms.length) return {};
+  // Si hay reparto configurado a nivel hogar y suma 100, usarlo
+  const rConfig = state.hogar && state.hogar.repartoDefault ? state.hogar.repartoDefault : null;
+  if (rConfig) {
+    const total = ms.reduce((a, m) => a + (Number(rConfig[m.id]) || 0), 0);
+    if (total === 100) {
+      const r = {};
+      ms.forEach((m) => { r[m.id] = Number(rConfig[m.id]) || 0; });
+      return r;
+    }
+  }
+  // Fallback: dividir equitativamente
   const pct = Math.floor(100 / ms.length);
   const r = {};
   ms.forEach((m, i) => { r[m.id] = (i === ms.length - 1) ? 100 - pct * (ms.length - 1) : pct; });
@@ -968,9 +995,9 @@ function preparaFormGasto() {
 
   // Tipo según modo
   if (_modoApp === "comun") {
-    f.tipo.innerHTML = `<option value="compartido">Compartido (hogar)</option>`;
+    f.tipo.innerHTML = `<option value="compartido">Compartido (hogar)</option><option value="inesperado">Inesperado (hogar)</option>`;
   } else {
-    f.tipo.innerHTML = `<option value="personal">Personal (mío)</option><option value="inesperado">Inesperado</option>`;
+    f.tipo.innerHTML = `<option value="personal">Personal (mío)</option><option value="inesperado">Inesperado (mío)</option>`;
   }
 
   // Pagador: en común permite elegir, en personal es el miembro activo
@@ -992,12 +1019,20 @@ function preparaFormGasto() {
 
   f.tipo.onchange = () => {
     const t = f.tipo.value;
-    if (t === "compartido") renderRepartoInputs(repartoPorDefecto(), "compartido");
-    else if (t === "personal") renderRepartoInputs(repartoTodoPara(f.pagadoPor.value), "personal");
-    else renderRepartoInputs(repartoPorDefecto(), "inesperado");
+    if (t === "compartido") {
+      renderRepartoInputs(repartoPorDefecto(), "compartido");
+    } else if (t === "personal") {
+      renderRepartoInputs(repartoTodoPara(f.pagadoPor.value), "personal");
+    } else if (t === "inesperado") {
+      if (_modoApp === "comun") renderRepartoInputs(repartoPorDefecto(), "compartido");
+      else renderRepartoInputs(repartoTodoPara(f.pagadoPor.value), "personal");
+    }
   };
   f.pagadoPor.onchange = () => {
-    if (f.tipo.value === "personal") renderRepartoInputs(repartoTodoPara(f.pagadoPor.value), "personal");
+    const t = f.tipo.value;
+    if (t === "personal" || (t === "inesperado" && _modoApp === "personal")) {
+      renderRepartoInputs(repartoTodoPara(f.pagadoPor.value), "personal");
+    }
   };
   $("#btn-reparto-igual").onclick = () => renderRepartoInputs(repartoPorDefecto(), f.tipo.value);
 }
@@ -1007,7 +1042,8 @@ $("#form-gasto").addEventListener("submit", (e) => {
   const f = e.target;
   const tipo = f.tipo.value;
   const pagadoPor = f.pagadoPor.value;
-  const reparto = tipo === "personal" ? repartoTodoPara(pagadoPor) : leerReparto();
+  const soloPagador = (tipo === "personal") || (tipo === "inesperado" && _modoApp === "personal");
+  const reparto = soloPagador ? repartoTodoPara(pagadoPor) : leerReparto();
   state.gastos.push({
     id: uid(),
     fecha: f.fecha.value,
@@ -1770,6 +1806,51 @@ function renderInicio() {
 // ============================================================
 // AJUSTES
 // ============================================================
+function renderRepartoDefault() {
+  const wrap = $("#reparto-default-inputs");
+  if (!wrap) return;
+  const ms = state.miembros || [];
+  if (!ms.length) { wrap.innerHTML = ""; return; }
+  const rConfig = state.hogar?.repartoDefault || {};
+  const equitativo = Math.round(100 / ms.length);
+  wrap.innerHTML = ms.map((m) => {
+    const val = rConfig[m.id] != null ? rConfig[m.id] : equitativo;
+    return `<div class="rep-row">
+      <span class="rep-name" style="--c:${escape(m.color)}">${escape(m.nombre)}</span>
+      <input type="number" min="0" max="100" step="1" data-mid="${escape(m.id)}" value="${val}" class="rep-default-input" />
+      <span>%</span>
+    </div>`;
+  }).join("") + `<div class="rep-row" style="border-top:1px solid var(--line); padding-top:6px;"><span class="rep-name muted">Total</span><strong id="rep-default-suma" style="margin-right:34px">100 %</strong></div>`;
+  const inputs = wrap.querySelectorAll(".rep-default-input");
+  const sumEl = $("#rep-default-suma");
+  const recalcular = () => {
+    const suma = Array.from(inputs).reduce((a, inp) => a + (Number(inp.value) || 0), 0);
+    sumEl.textContent = suma + " %";
+    sumEl.style.color = suma === 100 ? "var(--pos)" : "var(--neg)";
+  };
+  inputs.forEach((inp) => inp.addEventListener("input", recalcular));
+  recalcular();
+}
+
+const _formRepartoDefault = $("#form-reparto-default");
+if (_formRepartoDefault) {
+  _formRepartoDefault.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const r = {};
+    let total = 0;
+    document.querySelectorAll(".rep-default-input").forEach((inp) => {
+      const v = Math.max(0, Math.min(100, Number(inp.value) || 0));
+      r[inp.dataset.mid] = v;
+      total += v;
+    });
+    if (total !== 100) { toast("La suma debe ser exactamente 100%"); return; }
+    if (!state.hogar) state.hogar = {};
+    state.hogar.repartoDefault = r;
+    save();
+    toast("Reparto guardado");
+  });
+}
+
 $("#form-hogar").addEventListener("submit", (e) => {
   e.preventDefault();
   const f = e.target;
@@ -3111,6 +3192,7 @@ function renderAll() {
   if (chkSyncAuto) chkSyncAuto.checked = syncAuto;
   renderMiembros();
   renderCategorias();
+  renderRepartoDefault();
 }
 
 // ============================================================
