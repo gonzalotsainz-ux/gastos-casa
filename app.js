@@ -2608,10 +2608,9 @@ function ahorroMesReal(mesISO) {
 }
 
 function leerFiltrosSeg() {
-  const filtro = $("#seg-filtro") ? $("#seg-filtro").value : "todos";
   const vistaSel = $("#seg-vista") ? $("#seg-vista").value : "total";
-  // vistaSel puede ser "total", "cat:Vivienda", "mbr:abc123"
-  const filtros = { tipo: filtro };
+  // El Seguimiento es siempre de gastos compartidos (del hogar)
+  const filtros = { tipo: "compartido" };
   if (vistaSel.startsWith("cat:")) filtros.categoria = vistaSel.slice(4);
   else if (vistaSel.startsWith("mbr:")) filtros.miembro = vistaSel.slice(4);
   return { filtros, vistaSel };
@@ -2855,8 +2854,8 @@ function renderChartObj() {
     dataObj = [Number(state.objetivos.ahorroMes) || 0];
     dataReal = [ahorroMesReal(mes)];
   } else {
-    // Gasto por categoría
-    const realPorCat = gastoMesPorCategoria(mes, { tipo: "todos" });
+    // Gasto por categoría (solo compartidos)
+    const realPorCat = gastoMesPorCategoria(mes, { tipo: "compartido" });
     const todasCats = new Set([
       ...Object.keys(state.objetivos.porSubcategoria || {}),
       ...Object.keys(realPorCat),
@@ -2972,8 +2971,8 @@ function mostrarTablaObj(mesISO, modo) {
     return;
   }
 
-  // Modo gasto: detalle agrupado por categoría con subcategorías como filas
-  const realPorSub = gastoMesPorSubcategoria(mesISO, { tipo: "todos" });
+  // Modo gasto: detalle agrupado por categoría con subcategorías como filas (solo compartidos)
+  const realPorSub = gastoMesPorSubcategoria(mesISO, { tipo: "compartido" });
   const objSubMap = state.objetivos.porSubcategoria || {};
 
   // Construir lista de todas las categorías que tienen algo (objetivo o gasto real)
@@ -3075,7 +3074,7 @@ function mostrarDetalleObjCategoria(mesISO, modo, cat) {
 }
 
 // Listeners
-["seg-filtro", "seg-vista", "seg-rango", "seg-ingresos"].forEach((id) => {
+["seg-vista", "seg-rango", "seg-ingresos"].forEach((id) => {
   document.addEventListener("change", (e) => { if (e.target.id === id) renderChartEvo(); });
 });
 ["seg-obj-modo", "seg-obj-mes"].forEach((id) => {
