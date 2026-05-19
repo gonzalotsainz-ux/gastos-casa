@@ -1937,6 +1937,38 @@ $("#btn-reset").addEventListener("click", () => {
   toast("Datos locales borrados (la nube se mantiene)");
 });
 
+const _btnResetGastos = $("#btn-reset-gastos");
+if (_btnResetGastos) {
+  _btnResetGastos.addEventListener("click", () => {
+    if (!confirmar(`¿Borrar TODOS los gastos del hogar "${state.hogar.nombre}"?\n\nMantiene miembros, ingresos, ahorros, categorías y configuración.`)) return;
+    state.gastos = [];
+    state.liquidaciones = []; // cuadre asociado pierde sentido
+    save();
+    renderAll();
+    toast("Gastos borrados");
+  });
+}
+const _btnResetIngresos = $("#btn-reset-ingresos");
+if (_btnResetIngresos) {
+  _btnResetIngresos.addEventListener("click", () => {
+    if (!confirmar(`¿Borrar TODOS los ingresos del hogar "${state.hogar.nombre}"?`)) return;
+    state.ingresos = [];
+    save();
+    renderAll();
+    toast("Ingresos borrados");
+  });
+}
+const _btnResetAhorros = $("#btn-reset-ahorros");
+if (_btnResetAhorros) {
+  _btnResetAhorros.addEventListener("click", () => {
+    if (!confirmar(`¿Borrar TODOS los objetivos de ahorro del hogar "${state.hogar.nombre}"?`)) return;
+    state.ahorros = [];
+    save();
+    renderAll();
+    toast("Ahorros borrados");
+  });
+}
+
 // ============================================================
 // IMPORTAR EXCEL BANCARIO
 // ============================================================
