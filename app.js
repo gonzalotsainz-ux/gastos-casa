@@ -1063,6 +1063,7 @@ function renderGastos() {
       <td class="num">${fmtMoney(g.importe)}</td>
       <td class="acciones">
         ${_modoApp === "personal" && (g.tipo === "personal" || g.tipo === "inesperado") ? `<button class="link" data-mover="${escape(g.id)}" title="Pasar a gasto compartido del hogar">→ Compartido</button>` : ""}
+        ${_modoApp === "comun" && g.tipo === "compartido" ? `<button class="link" data-mover-personal="${escape(g.id)}" title="Pasar a gasto personal del que pagó">→ Personal</button>` : ""}
         <button class="link danger" data-del="${escape(g.id)}">Eliminar</button>
       </td>
     </tr>`;
@@ -1087,6 +1088,21 @@ function renderGastos() {
       renderInicio();
       renderCuadre();
       toast("Movido a compartido");
+    });
+  });
+  tb.querySelectorAll("[data-mover-personal]").forEach((b) => {
+    b.addEventListener("click", () => {
+      const g = state.gastos.find((x) => x.id === b.dataset.moverPersonal);
+      if (!g) return;
+      const nombre = nombreMiembro(g.pagadoPor);
+      if (!confirmar(`Mover "${g.descripcion}" (${fmtMoney(g.importe)}) a gasto personal de ${nombre}.`)) return;
+      g.tipo = "personal";
+      g.reparto = repartoTodoPara(g.pagadoPor);
+      save();
+      renderGastos();
+      renderInicio();
+      renderCuadre();
+      toast("Movido a personal de " + nombre);
     });
   });
 }
@@ -1955,6 +1971,25 @@ $("#btn-reset").addEventListener("click", () => {
   renderAll();
   toast("Datos locales borrados (la nube se mantiene)");
 });
+
+const _btnReclasificar = $("#btn-reclasificar-importados");
+if (_btnReclasificar) {
+  _btnReclasificar.addEventListener("click", () => {
+    const candidatos = state.gastos.filter((g) => g.tipo === "compartido" && (g.nota || "").toLowerCase().includes("importado"));
+    if (!candidatos.length) {
+      toast("No hay gastos importados marcados como compartidos");
+      return;
+    }
+    if (!confirmar(`Hay ${candidatos.length} gastos importados marcados como compartidos.\n\n¿Pasarlos todos a gastos personales (al miembro que pagó)?`)) return;
+    candidatos.forEach((g) => {
+      g.tipo = "personal";
+      g.reparto = repartoTodoPara(g.pagadoPor);
+    });
+    save();
+    renderAll();
+    toast(`${candidatos.length} gastos pasados a personales`);
+  });
+}
 
 const _btnResetGastos = $("#btn-reset-gastos");
 if (_btnResetGastos) {
