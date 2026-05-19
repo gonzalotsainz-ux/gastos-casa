@@ -1352,6 +1352,21 @@ details summary:hover { color: var(--ink-soft); }
 
 #imp-counter { text-transform: none; letter-spacing: 0; font-weight: 400; }
 
+#tabla-gastos .cat-edit-cell {
+  display: flex; flex-direction: column; gap: 4px;
+  min-width: 160px;
+}
+#tabla-gastos .row-cat,
+#tabla-gastos .row-sub {
+  font-size: .82rem;
+  padding: 4px 6px;
+  min-height: 28px;
+  border-color: var(--line-strong);
+  background: var(--surface);
+  font-family: inherit;
+}
+#tabla-gastos .row-sub { color: var(--ink-soft); }
+
 @media (max-width: 720px) {
   .import-preview { max-height: 280px; }
   .import-actions { justify-content: stretch; }

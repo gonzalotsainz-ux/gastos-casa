@@ -1124,11 +1124,19 @@ function renderGastos() {
   tb.innerHTML = list.map((g) => {
     total += Number(g.importe) || 0;
     const tipoLbl = g.tipo === "compartido" ? "Compartido" : g.tipo === "personal" ? "Personal" : "Inesperado";
+    const subs = getSubsDe(g.categoria);
+    const catOptions = state.catGastos.map((c) => `<option ${c.cat === g.categoria ? "selected" : ""}>${escape(c.cat)}</option>`).join("");
+    const subOptions = subs.length
+      ? subs.map((s) => `<option ${s === g.subcategoria ? "selected" : ""}>${escape(s)}</option>`).join("")
+      : `<option value="">—</option>`;
     return `<tr data-id="${escape(g.id)}">
       <td>${fmtFecha(g.fecha)}</td>
       <td>${escape(g.descripcion)}${g.nota ? `<div class="muted small">${escape(g.nota)}</div>` : ""}</td>
       <td><span class="badge badge-${g.tipo}">${tipoLbl}</span></td>
-      <td>${escape(g.categoria || "")}${g.subcategoria ? `<div class="muted small">${escape(g.subcategoria)}</div>` : ""}</td>
+      <td class="cat-edit-cell">
+        <select class="row-cat" data-id="${escape(g.id)}" title="Categoría">${catOptions}</select>
+        <select class="row-sub" data-id="${escape(g.id)}" title="Subcategoría">${subOptions}</select>
+      </td>
       <td><span class="chip" style="--c:${escape(getMiembro(g.pagadoPor)?.color || "#888")}">${escape(nombreMiembro(g.pagadoPor))}</span></td>
       <td class="num">${fmtMoney(g.importe)}</td>
       <td class="acciones">
@@ -1139,6 +1147,34 @@ function renderGastos() {
     </tr>`;
   }).join("") || `<tr><td colspan="7" class="muted center">Sin gastos con esos filtros</td></tr>`;
   $("#suma-gastos").textContent = `· ${list.length} mov. · Total ${fmtMoney(total)}`;
+  tb.querySelectorAll(".row-cat").forEach((sel) => {
+    sel.addEventListener("change", () => {
+      const g = state.gastos.find((x) => x.id === sel.dataset.id);
+      if (!g) return;
+      g.categoria = sel.value;
+      const subs = getSubsDe(sel.value);
+      g.subcategoria = subs.length ? subs[0] : "";
+      const subSel = tb.querySelector(`.row-sub[data-id="${sel.dataset.id}"]`);
+      if (subSel) {
+        subSel.innerHTML = subs.length
+          ? subs.map((s) => `<option ${s === g.subcategoria ? "selected" : ""}>${escape(s)}</option>`).join("")
+          : `<option value="">—</option>`;
+      }
+      save();
+      renderInicio();
+      toast("Categoría actualizada");
+    });
+  });
+  tb.querySelectorAll(".row-sub").forEach((sel) => {
+    sel.addEventListener("change", () => {
+      const g = state.gastos.find((x) => x.id === sel.dataset.id);
+      if (!g) return;
+      g.subcategoria = sel.value;
+      save();
+      renderInicio();
+      toast("Subcategoría actualizada");
+    });
+  });
   tb.querySelectorAll("[data-del]").forEach((b) => {
     b.addEventListener("click", () => {
       if (!confirmar("¿Eliminar este gasto?")) return;
