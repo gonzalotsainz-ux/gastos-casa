@@ -861,6 +861,8 @@ $("#form-join").addEventListener("submit", async (e) => {
 });
 
 $("#btn-logout").addEventListener("click", logout);
+const _btnLogout2 = $("#btn-logout-2");
+if (_btnLogout2) _btnLogout2.addEventListener("click", logout);
 
 // ============================================================
 // NAVEGACIÓN (tabs / sidebar)
@@ -1059,7 +1061,10 @@ function renderGastos() {
       <td>${escape(g.categoria || "")}${g.subcategoria ? `<div class="muted small">${escape(g.subcategoria)}</div>` : ""}</td>
       <td><span class="chip" style="--c:${escape(getMiembro(g.pagadoPor)?.color || "#888")}">${escape(nombreMiembro(g.pagadoPor))}</span></td>
       <td class="num">${fmtMoney(g.importe)}</td>
-      <td class="acciones"><button class="link danger" data-del="${escape(g.id)}">Eliminar</button></td>
+      <td class="acciones">
+        ${_modoApp === "personal" && (g.tipo === "personal" || g.tipo === "inesperado") ? `<button class="link" data-mover="${escape(g.id)}" title="Pasar a gasto compartido del hogar">→ Compartido</button>` : ""}
+        <button class="link danger" data-del="${escape(g.id)}">Eliminar</button>
+      </td>
     </tr>`;
   }).join("") || `<tr><td colspan="7" class="muted center">Sin gastos con esos filtros</td></tr>`;
   $("#suma-gastos").textContent = `· ${list.length} mov. · Total ${fmtMoney(total)}`;
@@ -1068,6 +1073,20 @@ function renderGastos() {
       if (!confirmar("¿Eliminar este gasto?")) return;
       state.gastos = state.gastos.filter((x) => x.id !== b.dataset.del);
       save(); renderGastos(); renderInicio(); renderCuadre();
+    });
+  });
+  tb.querySelectorAll("[data-mover]").forEach((b) => {
+    b.addEventListener("click", () => {
+      const g = state.gastos.find((x) => x.id === b.dataset.mover);
+      if (!g) return;
+      if (!confirmar(`Mover "${g.descripcion}" (${fmtMoney(g.importe)}) a gasto compartido del hogar.\n\nSe aplicará reparto 50/50.`)) return;
+      g.tipo = "compartido";
+      g.reparto = repartoPorDefecto();
+      save();
+      renderGastos();
+      renderInicio();
+      renderCuadre();
+      toast("Movido a compartido");
     });
   });
 }
@@ -2067,7 +2086,13 @@ function rellenarMappings(headers) {
 
 function rellenarSelectsImport() {
   const sm = $("#imp-miembro");
-  sm.innerHTML = state.miembros.map((m) => `<option value="${escape(m.id)}" ${m.id === sessionUserId ? "selected" : ""}>${escape(m.nombre)}</option>`).join("");
+  // Al importar desde la zona personal, fijar al miembro activo (sin opción de cambiar)
+  const yo = getMiembro(_miembroActivoId) || getMiembro(sessionUserId);
+  if (yo) {
+    sm.innerHTML = `<option value="${escape(yo.id)}" selected>${escape(yo.nombre)}</option>`;
+  } else {
+    sm.innerHTML = state.miembros.map((m) => `<option value="${escape(m.id)}">${escape(m.nombre)}</option>`).join("");
+  }
   const sc = $("#imp-cat");
   sc.innerHTML = state.catGastos.map((c) => `<option>${escape(c.cat)}</option>`).join("");
   const sub = $("#imp-subcat");

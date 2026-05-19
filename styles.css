@@ -425,6 +425,39 @@ h3 { font-size: .82rem; color: var(--ink-soft); font-weight: 500; }
 }
 .sel-registro:hover { background: var(--surface-3); color: var(--ink); }
 .sel-registro:focus { outline: 1px solid var(--brand-soft); box-shadow: none; }
+
+.btn-personal {
+  background: var(--warn-soft);
+  color: var(--warn);
+  border: 1px solid var(--warn-line);
+  font-weight: 600;
+  font-size: .85rem;
+  padding: 6px 14px;
+  border-radius: 999px;
+  min-height: 32px;
+  letter-spacing: -0.005em;
+}
+.btn-personal:hover {
+  background: var(--warn);
+  color: #1a0f00;
+  border-color: var(--warn);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(245, 201, 118, 0.3);
+}
+.btn-volver-comun {
+  background: var(--brand-soft);
+  color: var(--brand);
+  border: 1px solid rgba(228, 229, 233, 0.3);
+  font-weight: 600;
+  font-size: .85rem;
+  padding: 6px 14px;
+  border-radius: 999px;
+  min-height: 32px;
+}
+.btn-volver-comun:hover {
+  background: var(--brand);
+  color: var(--brand-ink);
+}
 .user-avatar {
   width: 28px; height: 28px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
@@ -1429,8 +1462,15 @@ body.no-user .layout { display: none; }
   }
 
   .user-name { display: none; }
-  .user-chip { padding: 4px 4px 4px 4px; }
+  .user-chip { padding: 4px 6px; gap: 6px; }
   .user-chip .ghost { padding: 4px 8px; font-size: .75rem; }
+  .sel-registro { font-size: .78rem; padding: 3px 6px; max-width: 110px; }
+  .modo-badge { font-size: .62rem; padding: 2px 7px; }
+  .btn-personal, .btn-volver-comun {
+    font-size: .8rem; padding: 5px 11px; min-height: 30px;
+  }
+  /* Logout escondido en móvil; se puede salir desde Ajustes */
+  #btn-logout { display: none; }
 
   .card { padding: 14px 14px; border-radius: var(--r-sm); }
   .card.stat { padding: 14px 14px; }

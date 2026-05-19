@@ -121,8 +121,8 @@
   <div class="user-chip" id="user-chip">
     <span class="modo-badge" id="modo-badge">Común</span>
     <select id="sel-registro-como" class="sel-registro" title="Estoy registrando como…"></select>
-    <button type="button" id="btn-modo-personal" class="ghost small">🔒 Mi zona</button>
-    <button type="button" id="btn-modo-comun" class="ghost small hidden">← Común</button>
+    <button type="button" id="btn-modo-personal" class="btn-personal">🔒 Mi zona</button>
+    <button type="button" id="btn-modo-comun" class="btn-volver-comun hidden">← Común</button>
     <button type="button" id="btn-logout" class="ghost small" title="Cerrar sesión">⎋</button>
   </div>
 </header>
@@ -196,8 +196,13 @@
     <!-- GASTOS -->
     <section id="tab-gastos" class="tab">
 
-      <!-- IMPORTAR EXCEL BANCARIO -->
-      <div class="card import-card">
+      <!-- Aviso: importar SOLO desde Personal -->
+      <div class="card solo-comun import-aviso">
+        <p class="muted small">Para importar tu extracto bancario, entra primero en <strong>🔒 Mi zona</strong> (botón arriba). Los movimientos del banco son personales por defecto; desde la zona personal puedes marcarlos como compartidos si toca.</p>
+      </div>
+
+      <!-- IMPORTAR EXCEL BANCARIO (solo en Personal) -->
+      <div class="card import-card solo-personal">
         <h2>Importar movimientos del banco</h2>
         <div id="import-paso-1">
           <p class="muted small">Sube tu extracto de movimientos en <strong>Excel (.xlsx)</strong> o <strong>CSV</strong>. La app detecta las columnas y separa gastos (importes negativos) de ingresos (positivos).</p>
@@ -242,8 +247,7 @@
             <label>
               <span>Tipo (para gastos)</span>
               <select id="imp-tipo">
-                <option value="compartido">Compartido</option>
-                <option value="personal">Personal</option>
+                <option value="personal" selected>Personal</option>
                 <option value="inesperado">Inesperado</option>
               </select>
             </label>
@@ -862,6 +866,13 @@
           </label>
           <button type="button" id="btn-sync-push" class="ghost">Subir ahora</button>
           <button type="button" id="btn-sync-pull" class="ghost">Bajar ahora</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Sesión</h2>
+        <div class="form-row">
+          <button type="button" id="btn-logout-2" class="ghost">⎋ Cerrar sesión y elegir casa</button>
         </div>
       </div>
 
