@@ -2328,20 +2328,57 @@ function renderPreviewImport() {
   const ingresos = total - gastos;
   $("#imp-counter").textContent = `· ${total} mov. · ${gastos} gastos · ${ingresos} ingresos`;
 
+  const catDef = $("#imp-cat") ? $("#imp-cat").value : "";
+  const subDef = $("#imp-subcat") ? $("#imp-subcat").value : "";
+
+  // Inicializar overrides por fila si no existen
+  if (!_importData.overrides) _importData.overrides = {};
+  const overridesPrevios = _importData.overrides;
+
   body.innerHTML = _importData.rowsFiltradas.slice(0, 250).map((x) => {
     const checked = skipDup && x.duplicado ? "" : "checked";
+    const ov = overridesPrevios[x.idx] || {};
+    const catFila = ov.cat || catDef;
+    const subFila = ov.sub != null ? ov.sub : subDef;
+    const subsCat = getSubsDe(catFila);
     return `<tr class="${x.duplicado ? "dup" : ""}">
       <td><input type="checkbox" class="imp-check" data-i="${x.idx}" ${checked} /></td>
       <td>${fmtFecha(x.fecha)}</td>
       <td>${escape(x.concepto)}</td>
       <td class="num ${x.importe < 0 ? "neg" : "pos"}">${fmtMoney(x.importe)}</td>
       <td><span class="badge ${x.tipo === "gasto" ? "badge-rechazada" : "badge-aceptada"}">${x.tipo === "gasto" ? "Gasto" : "Ingreso"}</span></td>
+      <td class="imp-cat-cell">
+        <select class="imp-row-cat" data-idx="${x.idx}">
+          ${state.catGastos.map((c) => `<option ${c.cat === catFila ? "selected" : ""}>${escape(c.cat)}</option>`).join("")}
+        </select>
+        <select class="imp-row-sub" data-idx="${x.idx}">
+          ${subsCat.length ? subsCat.map((s) => `<option ${s === subFila ? "selected" : ""}>${escape(s)}</option>`).join("") : `<option value="">—</option>`}
+        </select>
+      </td>
       <td>${x.duplicado ? `<span class="muted small">Ya registrado</span>` : ""}</td>
     </tr>`;
   }).join("");
   if (total > 250) {
-    body.innerHTML += `<tr><td colspan="6" class="muted center small">+ ${total - 250} más se importarán también si están marcados</td></tr>`;
+    body.innerHTML += `<tr><td colspan="7" class="muted center small">+ ${total - 250} más usan la categoría por defecto</td></tr>`;
   }
+
+  // Listeners para cambios por fila
+  body.querySelectorAll(".imp-row-cat").forEach((sel) => {
+    sel.addEventListener("change", () => {
+      const idx = sel.dataset.idx;
+      const subSel = body.querySelector(`.imp-row-sub[data-idx="${idx}"]`);
+      const subs = getSubsDe(sel.value);
+      subSel.innerHTML = subs.length ? subs.map((s) => `<option>${escape(s)}</option>`).join("") : `<option value="">—</option>`;
+      _importData.overrides[idx] = { cat: sel.value, sub: subSel.value || "" };
+    });
+  });
+  body.querySelectorAll(".imp-row-sub").forEach((sel) => {
+    sel.addEventListener("change", () => {
+      const idx = sel.dataset.idx;
+      const catSel = body.querySelector(`.imp-row-cat[data-idx="${idx}"]`);
+      _importData.overrides[idx] = { cat: catSel.value, sub: sel.value };
+    });
+  });
 }
 
 function activarPaso2Import() {
@@ -2420,11 +2457,17 @@ function ejecutarImport() {
     $$(".imp-check").filter((c) => c.checked).map((c) => parseInt(c.dataset.i, 10))
   );
   let nGastos = 0, nIngresos = 0, nDup = 0;
+  const overrides = _importData.overrides || {};
   _importData.rowsFiltradas.forEach((x) => {
     if (!seleccionados.has(x.idx)) {
       if (x.duplicado) nDup++;
       return;
     }
+    // Categoría por fila (override del usuario) o default
+    const ov = overrides[x.idx];
+    const catFinal = (ov && ov.cat) || catDef;
+    const subFinal = (ov && ov.sub != null) ? ov.sub : subDef;
+
     if (x.tipo === "gasto") {
       state.gastos.push({
         id: uid(),
@@ -2432,10 +2475,10 @@ function ejecutarImport() {
         descripcion: x.concepto,
         importe: Math.abs(x.importe),
         tipo: tipoGasto,
-        categoria: catDef,
-        subcategoria: subDef,
+        categoria: catFinal,
+        subcategoria: subFinal,
         pagadoPor: miembro,
-        reparto: tipoGasto === "personal" ? repartoTodoPara(miembro) : repartoPorDefecto(),
+        reparto: (tipoGasto === "personal" || (tipoGasto === "inesperado" && _modoApp === "personal")) ? repartoTodoPara(miembro) : repartoPorDefecto(),
         nota: "Importado del banco",
         creadoPor: sessionUserId,
         creadoEn: Date.now(),
@@ -2447,7 +2490,7 @@ function ejecutarImport() {
         fecha: x.fecha,
         descripcion: x.concepto,
         importe: Math.abs(x.importe),
-        categoria: catDef,
+        categoria: catFinal,
         miembro,
         recurrente: false,
         nota: "Importado del banco",

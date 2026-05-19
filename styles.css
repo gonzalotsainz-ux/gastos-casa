@@ -1329,6 +1329,22 @@ details summary:hover { color: var(--ink-soft); }
   margin: 0;
   accent-color: var(--brand);
 }
+.import-preview .imp-cat-cell {
+  display: flex; flex-direction: column; gap: 4px;
+  min-width: 140px;
+}
+.import-preview .imp-row-cat,
+.import-preview .imp-row-sub {
+  font-size: .76rem;
+  padding: 4px 6px;
+  min-height: 26px;
+  border-color: var(--line-strong);
+  background: var(--surface);
+  font-family: inherit;
+}
+.import-preview .imp-row-sub {
+  color: var(--ink-soft);
+}
 .import-actions {
   justify-content: flex-end;
 }
