@@ -134,6 +134,7 @@
     <nav class="tabs" id="tabs">
       <button data-tab="inicio" class="active"><span class="tab-icon" aria-hidden="true">🏠</span><span>Inicio</span></button>
       <button data-tab="gastos"><span class="tab-icon" aria-hidden="true">💸</span><span>Gastos</span></button>
+      <button data-tab="cuentas"><span class="tab-icon" aria-hidden="true">💳</span><span>Cuentas</span></button>
       <button data-tab="ingresos" class="solo-personal"><span class="tab-icon" aria-hidden="true">💰</span><span>Ingresos</span></button>
       <button data-tab="ahorros"><span class="tab-icon" aria-hidden="true">🎯</span><span>Ahorros</span></button>
       <button data-tab="inversiones"><span class="tab-icon" aria-hidden="true">📈</span><span>Inversiones</span></button>
@@ -465,6 +466,96 @@
           <tbody id="tabla-ingresos"></tbody>
         </table>
       </div>
+    </section>
+
+    <!-- CUENTAS -->
+    <section id="tab-cuentas" class="tab">
+
+      <div class="card">
+        <h2>Cuentas <span class="muted small" id="cuentas-subtitulo"></span></h2>
+        <div id="lista-cuentas" class="cuentas-grid"></div>
+      </div>
+
+      <div class="card">
+        <h2>Añadir cuenta</h2>
+        <form id="form-cuenta" class="form-stack">
+          <div class="form-row">
+            <label class="grow">
+              <span>Nombre</span>
+              <input name="nombre" required placeholder="Ej: Banco BBVA · Efectivo · Tarjeta Visa" />
+            </label>
+            <label>
+              <span>Tipo</span>
+              <select name="tipo">
+                <option value="banco">Banco</option>
+                <option value="efectivo">Efectivo</option>
+                <option value="tarjeta">Tarjeta</option>
+                <option value="ahorro">Ahorro</option>
+                <option value="otra">Otra</option>
+              </select>
+            </label>
+          </div>
+          <div class="form-row">
+            <label>
+              <span>Saldo inicial €</span>
+              <input name="saldoInicial" type="number" step="0.01" value="0" />
+            </label>
+            <label>
+              <span>Fecha del saldo</span>
+              <input name="fechaInicial" type="date" />
+            </label>
+            <label>
+              <span>Color</span>
+              <input name="color" type="color" value="#7a4ec5" />
+            </label>
+          </div>
+          <label>
+            <span>Notas</span>
+            <input name="notas" placeholder="IBAN, propietario, etc." />
+          </label>
+          <div class="form-row">
+            <button type="submit" class="primary">Crear cuenta</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Transferir entre cuentas</h2>
+        <p class="muted small">Mueve dinero de una cuenta a otra (sin que cuente como gasto ni ingreso). En personal puedes transferir a una cuenta común (aportación al fondo común).</p>
+        <form id="form-transferencia" class="form-stack">
+          <div class="form-row">
+            <label>
+              <span>Desde</span>
+              <select name="desde" id="trans-desde"></select>
+            </label>
+            <label>
+              <span>Hacia</span>
+              <select name="hacia" id="trans-hacia"></select>
+            </label>
+            <label>
+              <span>Importe €</span>
+              <input name="importe" type="number" step="0.01" min="0" required />
+            </label>
+            <label>
+              <span>Fecha</span>
+              <input name="fecha" type="date" required />
+            </label>
+          </div>
+          <label>
+            <span>Nota</span>
+            <input name="nota" placeholder="Aportación mensual al fondo común, ahorro, etc." />
+          </label>
+          <div class="form-row">
+            <button type="submit" class="primary">Registrar transferencia</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Movimientos recientes</h2>
+        <div id="lista-trans" class="list"></div>
+      </div>
+
     </section>
 
     <!-- AHORROS -->

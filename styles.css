@@ -1342,6 +1342,51 @@ details summary:hover { color: var(--ink-soft); }
   .import-actions button { flex: 1; min-width: 0; }
 }
 
+/* ============= Cuentas ============= */
+.cuentas-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+.cuenta-card {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--c, var(--brand));
+  border-radius: var(--r);
+  padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 8px;
+  transition: border-color var(--t) var(--ease);
+}
+.cuenta-card:hover { border-color: var(--line-strong); border-left-color: var(--c, var(--brand)); }
+.cuenta-head {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 8px;
+}
+.cuenta-head > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cuenta-head strong {
+  font-size: .98rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cuenta-head .muted.small { font-size: .72rem; text-transform: uppercase; letter-spacing: 0.08em; }
+.cuenta-saldo {
+  font-size: 1.6rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.025em;
+  color: var(--ink);
+}
+.cuenta-saldo.neg { color: var(--neg); }
+.cuenta-meta { font-size: .78rem; }
+
+@media (max-width: 480px) {
+  .cuentas-grid { grid-template-columns: 1fr; }
+  .cuenta-saldo { font-size: 1.4rem; }
+}
+
 /* ============= Modal (PIN zona personal) ============= */
 .modal-backdrop {
   position: fixed; inset: 0;

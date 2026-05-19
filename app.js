@@ -57,6 +57,8 @@ const defaultData = () => ({
   propuestas: [],
   liquidaciones: [],
   objetivos: { gastoMes: 0, ahorroMes: 0, porSubcategoria: {} },
+  cuentas: [],          // { id, nombre, tipo, ambito, saldoInicial, fechaInicial, color, notas, archivada }
+  transferencias: [],   // { id, fecha, desdeCuenta, haciaCuenta, importe, nota, miembro }
 });
 
 // Migración: si catGastos viene de una versión antigua (array plano de strings),
@@ -159,6 +161,35 @@ function ahorrosDelModo() {
 function inversionesDelModo() {
   if (_modoApp === "comun") return state.inversiones.filter((i) => i.ambito === "compartido");
   return state.inversiones.filter((i) => i.ambito === _miembroActivoId);
+}
+function cuentasDelModo() {
+  const arr = state.cuentas || [];
+  if (_modoApp === "comun") return arr.filter((c) => c.ambito === "compartido" && !c.archivada);
+  return arr.filter((c) => c.ambito === _miembroActivoId && !c.archivada);
+}
+function cuentasComunes() {
+  return (state.cuentas || []).filter((c) => c.ambito === "compartido" && !c.archivada);
+}
+function nombreCuenta(id) {
+  const c = (state.cuentas || []).find((x) => x.id === id);
+  return c ? c.nombre : "(cuenta eliminada)";
+}
+function saldoCuenta(cuentaId) {
+  const cuenta = (state.cuentas || []).find((c) => c.id === cuentaId);
+  if (!cuenta) return 0;
+  let saldo = Number(cuenta.saldoInicial) || 0;
+  state.ingresos.forEach((i) => { if (i.cuenta === cuentaId) saldo += Number(i.importe) || 0; });
+  state.gastos.forEach((g) => { if (g.cuenta === cuentaId) saldo -= Number(g.importe) || 0; });
+  (state.transferencias || []).forEach((t) => {
+    if (t.desdeCuenta === cuentaId) saldo -= Number(t.importe) || 0;
+    if (t.haciaCuenta === cuentaId) saldo += Number(t.importe) || 0;
+  });
+  state.ahorros.forEach((a) => {
+    (a.movimientos || []).forEach((m) => {
+      if (m.cuenta === cuentaId) saldo -= Number(m.importe) || 0;
+    });
+  });
+  return saldo;
 }
 
 function getMiembro(id) { return state.miembros.find((m) => m.id === id); }
@@ -899,6 +930,9 @@ function setupTabs() {
       }
       if (t === "objetivos") {
         renderObjetivos();
+      }
+      if (t === "cuentas") {
+        renderCuentas();
       }
     });
   });
@@ -2452,6 +2486,156 @@ $("#btn-imp-do").addEventListener("click", ejecutarImport);
 $("#imp-toggle-all").addEventListener("change", (e) => {
   $$(".imp-check").forEach((c) => { c.checked = e.target.checked; });
 });
+
+// ============================================================
+// CUENTAS (pestaña)
+// ============================================================
+function renderCuentas() {
+  const cs = cuentasDelModo();
+  $("#cuentas-subtitulo").textContent = _modoApp === "comun" ? "· del hogar" : `· de ${nombreMiembro(_miembroActivoId)}`;
+
+  const lista = $("#lista-cuentas");
+  if (lista) {
+    lista.innerHTML = cs.length ? cs.map((c) => {
+      const saldo = saldoCuenta(c.id);
+      const tipoLbl = { banco: "Banco", efectivo: "Efectivo", tarjeta: "Tarjeta", ahorro: "Ahorro", otra: "Otra" }[c.tipo] || "Cuenta";
+      return `<div class="cuenta-card" style="--c:${escape(c.color || '#7a4ec5')}">
+        <div class="cuenta-head">
+          <div>
+            <strong>${escape(c.nombre)}</strong>
+            <span class="muted small">${escape(tipoLbl)}</span>
+          </div>
+          <button class="link danger small" data-archivar-cuenta="${escape(c.id)}" title="Archivar">×</button>
+        </div>
+        <div class="cuenta-saldo ${saldo < 0 ? "neg" : ""}">${fmtMoney(saldo)}</div>
+        ${c.notas ? `<p class="muted small">${escape(c.notas)}</p>` : ""}
+        <div class="cuenta-meta">
+          <span class="muted small">Saldo inicial ${fmtMoney(c.saldoInicial || 0)}${c.fechaInicial ? ` · ${fmtFecha(c.fechaInicial)}` : ""}</span>
+        </div>
+      </div>`;
+    }).join("") : `<p class="muted">Aún no hay cuentas ${_modoApp === "comun" ? "del hogar" : "personales"}. Crea una abajo.</p>`;
+
+    lista.querySelectorAll("[data-archivar-cuenta]").forEach((b) => {
+      b.addEventListener("click", () => {
+        const c = state.cuentas.find((x) => x.id === b.dataset.archivarCuenta);
+        if (!c) return;
+        if (!confirmar(`Archivar la cuenta "${c.nombre}"?\n\nDesaparece del listado pero los movimientos asociados se mantienen.`)) return;
+        c.archivada = true;
+        save();
+        renderCuentas();
+      });
+    });
+  }
+
+  // Selectores de transferencia
+  const desde = $("#trans-desde");
+  const hacia = $("#trans-hacia");
+  if (desde && hacia) {
+    const optsCs = cs.map((c) => `<option value="${escape(c.id)}">${escape(c.nombre)} (${fmtMoney(saldoCuenta(c.id))})</option>`).join("");
+    desde.innerHTML = optsCs;
+    // El destino puede ser cualquiera del mismo ámbito + cuentas comunes (si estamos en personal) o personales del miembro registro (si estamos en común)
+    let optsHacia = optsCs;
+    if (_modoApp === "personal") {
+      const comunes = cuentasComunes();
+      if (comunes.length) {
+        optsHacia += `<optgroup label="Cuentas comunes del hogar">` + comunes.map((c) => `<option value="${escape(c.id)}">${escape(c.nombre)} · común</option>`).join("") + `</optgroup>`;
+      }
+    } else if (_modoApp === "comun") {
+      const personales = (state.cuentas || []).filter((c) => c.ambito !== "compartido" && !c.archivada);
+      if (personales.length) {
+        optsHacia += `<optgroup label="Cuentas personales">` + personales.map((c) => `<option value="${escape(c.id)}">${escape(c.nombre)} · ${escape(nombreMiembro(c.ambito))}</option>`).join("") + `</optgroup>`;
+      }
+    }
+    hacia.innerHTML = optsHacia;
+  }
+
+  // Fecha por defecto en form transferencia
+  const ft = $("#form-transferencia");
+  if (ft && !ft.fecha.value) ft.fecha.value = hoyISO();
+
+  // Lista de transferencias visibles (las que afectan a cuentas del modo)
+  const tb = $("#lista-trans");
+  if (tb) {
+    const cIds = new Set(cs.map((c) => c.id));
+    const trans = (state.transferencias || [])
+      .filter((t) => cIds.has(t.desdeCuenta) || cIds.has(t.haciaCuenta))
+      .sort((a, b) => (b.fecha || "").localeCompare(a.fecha || ""))
+      .slice(0, 30);
+    tb.innerHTML = trans.length ? trans.map((t) => `
+      <div class="row-item">
+        <span class="grow">
+          <strong>${escape(nombreCuenta(t.desdeCuenta))}</strong>
+          <span class="muted small">→</span>
+          <strong>${escape(nombreCuenta(t.haciaCuenta))}</strong>
+          <span class="muted small"> · ${fmtFecha(t.fecha)}${t.nota ? ` · ${escape(t.nota)}` : ""}</span>
+        </span>
+        <span class="num">${fmtMoney(t.importe)}</span>
+        <button class="link danger small" data-del-trans="${escape(t.id)}" title="Eliminar">×</button>
+      </div>
+    `).join("") : `<p class="muted">Sin transferencias.</p>`;
+    tb.querySelectorAll("[data-del-trans]").forEach((b) => {
+      b.addEventListener("click", () => {
+        if (!confirmar("¿Eliminar esta transferencia?")) return;
+        state.transferencias = (state.transferencias || []).filter((x) => x.id !== b.dataset.delTrans);
+        save();
+        renderCuentas();
+      });
+    });
+  }
+}
+
+const _formCuenta = $("#form-cuenta");
+if (_formCuenta) {
+  _formCuenta.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const f = e.target;
+    if (!state.cuentas) state.cuentas = [];
+    state.cuentas.push({
+      id: uid(),
+      nombre: f.nombre.value.trim(),
+      tipo: f.tipo.value,
+      ambito: _modoApp === "comun" ? "compartido" : _miembroActivoId,
+      saldoInicial: Number(f.saldoInicial.value) || 0,
+      fechaInicial: f.fechaInicial.value || hoyISO(),
+      color: f.color.value || "#7a4ec5",
+      notas: f.notas.value.trim(),
+      archivada: false,
+      creadoPor: sessionUserId,
+      creadoEn: Date.now(),
+    });
+    save();
+    f.reset();
+    f.color.value = "#7a4ec5";
+    renderCuentas();
+    toast("Cuenta creada");
+  });
+}
+
+const _formTransferencia = $("#form-transferencia");
+if (_formTransferencia) {
+  _formTransferencia.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const f = e.target;
+    if (f.desde.value === f.hacia.value) { toast("Las cuentas deben ser distintas"); return; }
+    if (!state.transferencias) state.transferencias = [];
+    state.transferencias.push({
+      id: uid(),
+      fecha: f.fecha.value,
+      desdeCuenta: f.desde.value,
+      haciaCuenta: f.hacia.value,
+      importe: Number(f.importe.value),
+      nota: f.nota.value.trim(),
+      miembro: _miembroActivoId,
+      creadoPor: sessionUserId,
+      creadoEn: Date.now(),
+    });
+    save();
+    f.reset();
+    f.fecha.value = hoyISO();
+    renderCuentas();
+    toast("Transferencia registrada");
+  });
+}
 
 // ============================================================
 // OBJETIVOS (pestaña)
