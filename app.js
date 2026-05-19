@@ -8,14 +8,14 @@ const APP_CONFIG = {
     {
       key: "ali-gon",
       nombre: "Casa ALI y GON",
-      binId: "6a0b79df6610dd3ae86801ec",
+      binId: "6a0b7889ee5a733b12deb8af",
       miembros: ["ALI", "GON"],
       color: "#7a4ec5",
     },
     {
       key: "luisa-vicente",
       nombre: "Casa LUISA y VICENTE",
-      binId: "6a0b7889ee5a733b12deb8af",
+      binId: "6a0b79df6610dd3ae86801ec",
       miembros: ["LUISA", "VICENTE"],
       color: "#2a8a5b",
     },
@@ -424,12 +424,18 @@ async function quickPickMember(hogarKey, miembroNombre) {
     try {
       toast("Conectando con " + hogar.nombre + "…");
       const cloud = await jsonbinGet(hogar.binId);
-      if (!cloud || !cloud.miembros || !cloud.miembros.length) {
-        // Bin vacío: ofrecemos repararlo creando los miembros sobre el mismo Bin ID
+      const miembrosBin = (cloud && Array.isArray(cloud.miembros)) ? cloud.miembros : [];
+      const esperados = hogar.miembros.map((s) => s.toUpperCase());
+      const nombresBin = miembrosBin.map((m) => (m.nombre || "").trim().toUpperCase());
+      const coincidenTodos = miembrosBin.length > 0 && esperados.every((n) => nombresBin.includes(n));
+
+      if (!coincidenTodos) {
+        const enBin = miembrosBin.length ? miembrosBin.map((m) => m.nombre).join(", ") : "(vacío)";
         if (window.confirm(
-          `El hogar "${hogar.nombre}" está vacío en la nube.\n\n` +
-          `¿Quieres re-crear ahora a ${hogar.miembros.join(" y ")} en este mismo hogar?\n\n` +
-          `Te pediré un PIN de 4 dígitos para cada miembro.`
+          `El bin de "${hogar.nombre}" contiene: ${enBin}\n\n` +
+          `Esta casa debería tener: ${hogar.miembros.join(" y ")}\n\n` +
+          `¿Sobrescribir el bin con ${hogar.miembros.join(" y ")}?\n` +
+          `(Si aceptas, te pediré un PIN de 4 dígitos para cada uno.)`
         )) {
           await repararHogar(hogar);
         }
