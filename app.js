@@ -2441,15 +2441,21 @@ function rellenarSelectsImport() {
   actualizarSub();
 }
 
-function clavesExistentes() {
-  const keys = new Set();
+function claveMov(fecha, descripcion, importe) {
+  return `${fecha}|${(descripcion || "").slice(0, 30).toLowerCase().trim()}|${Math.abs(Number(importe) || 0).toFixed(2)}`;
+}
+function indiceExistentes() {
+  // Map: clave → { tipo: "gasto"|"ingreso", id, fecha, descripcion, importe }
+  const idx = new Map();
   state.gastos.forEach((g) => {
-    keys.add(`${g.fecha}|${(g.descripcion || "").slice(0, 30).toLowerCase().trim()}|${Math.abs(Number(g.importe) || 0).toFixed(2)}`);
+    const k = claveMov(g.fecha, g.descripcion, g.importe);
+    if (!idx.has(k)) idx.set(k, { tipo: "gasto", id: g.id, fecha: g.fecha, descripcion: g.descripcion, importe: Number(g.importe) || 0 });
   });
   state.ingresos.forEach((g) => {
-    keys.add(`${g.fecha}|${(g.descripcion || "").slice(0, 30).toLowerCase().trim()}|${Math.abs(Number(g.importe) || 0).toFixed(2)}`);
+    const k = claveMov(g.fecha, g.descripcion, g.importe);
+    if (!idx.has(k)) idx.set(k, { tipo: "ingreso", id: g.id, fecha: g.fecha, descripcion: g.descripcion, importe: Number(g.importe) || 0 });
   });
-  return keys;
+  return idx;
 }
 
 function renderPreviewImport() {
@@ -2469,7 +2475,8 @@ function renderPreviewImport() {
     return;
   }
 
-  const existing = clavesExistentes();
+  const existing = indiceExistentes();
+  const soloDup = $("#imp-solo-dup") && $("#imp-solo-dup").checked;
 
   const parsed = _importData.rows.map((r, idx) => {
     let imp = 0;
@@ -2501,11 +2508,13 @@ function renderPreviewImport() {
   });
 
   _importData.rowsFiltradas = filtered.map((x) => {
-    const key = `${x.fecha}|${x.concepto.slice(0, 30).toLowerCase().trim()}|${Math.abs(x.importe).toFixed(2)}`;
+    const key = claveMov(x.fecha, x.concepto, x.importe);
+    const choca = existing.get(key) || null;
     return {
       ...x,
       tipo: x.importe < 0 ? "gasto" : "ingreso",
-      duplicado: existing.has(key),
+      duplicado: !!choca,
+      conflicto: choca,
       key,
     };
   });
@@ -2513,22 +2522,52 @@ function renderPreviewImport() {
   const total = _importData.rowsFiltradas.length;
   const gastos = _importData.rowsFiltradas.filter((x) => x.tipo === "gasto").length;
   const ingresos = total - gastos;
-  $("#imp-counter").textContent = `· ${total} mov. · ${gastos} gastos · ${ingresos} ingresos`;
+  const dupTotal = _importData.rowsFiltradas.filter((x) => x.duplicado).length;
+  $("#imp-counter").textContent = `· ${total} mov. · ${gastos} gastos · ${ingresos} ingresos${dupTotal ? " · " + dupTotal + " posibles duplicados" : ""}`;
+
+  const aviso = $("#imp-dup-aviso");
+  if (aviso) {
+    if (dupTotal > 0) {
+      aviso.hidden = false;
+      $("#imp-dup-aviso-detalle").textContent = ` ${dupTotal} de ${total} movimientos ya parecen registrados. Revisa cada uno y elige una acción (por defecto se omiten).`;
+    } else {
+      aviso.hidden = true;
+    }
+  }
 
   const catDef = $("#imp-cat") ? $("#imp-cat").value : "";
   const subDef = $("#imp-subcat") ? $("#imp-subcat").value : "";
 
   // Inicializar overrides por fila si no existen
   if (!_importData.overrides) _importData.overrides = {};
+  if (!_importData.dupAction) _importData.dupAction = {};
   const overridesPrevios = _importData.overrides;
+  const dupActionPrev = _importData.dupAction;
 
-  body.innerHTML = _importData.rowsFiltradas.slice(0, 250).map((x) => {
-    const checked = skipDup && x.duplicado ? "" : "checked";
+  const filasMostradas = soloDup
+    ? _importData.rowsFiltradas.filter((x) => x.duplicado)
+    : _importData.rowsFiltradas;
+
+  body.innerHTML = filasMostradas.slice(0, 250).map((x) => {
+    const accionDup = dupActionPrev[x.idx] || (skipDup ? "omitir" : "duplicar");
+    let checked = "checked";
+    if (x.duplicado && accionDup === "omitir") checked = "";
     const ov = overridesPrevios[x.idx] || {};
     const catFila = ov.cat || catDef;
     const subFila = ov.sub != null ? ov.sub : subDef;
     const subsCat = getSubsDe(catFila);
-    return `<tr class="${x.duplicado ? "dup" : ""}">
+    const estadoCell = x.duplicado
+      ? `<div class="dup-estado">
+          <span class="badge badge-dup">Duplicado</span>
+          <div class="muted xsmall">Choca con ${x.conflicto.tipo} del ${fmtFecha(x.conflicto.fecha)} · ${escape((x.conflicto.descripcion || "").slice(0, 36))} · ${fmtMoney(x.conflicto.importe)}</div>
+          <select class="imp-dup-action" data-idx="${x.idx}">
+            <option value="omitir" ${accionDup === "omitir" ? "selected" : ""}>Omitir (no importar)</option>
+            <option value="duplicar" ${accionDup === "duplicar" ? "selected" : ""}>Importar igualmente</option>
+            <option value="reemplazar" ${accionDup === "reemplazar" ? "selected" : ""}>Reemplazar el existente</option>
+          </select>
+        </div>`
+      : "";
+    return `<tr class="${x.duplicado ? "dup dup-action-" + accionDup : ""}">
       <td><input type="checkbox" class="imp-check" data-i="${x.idx}" ${checked} /></td>
       <td>${fmtFecha(x.fecha)}</td>
       <td>${escape(x.concepto)}</td>
@@ -2542,11 +2581,11 @@ function renderPreviewImport() {
           ${subsCat.length ? subsCat.map((s) => `<option ${s === subFila ? "selected" : ""}>${escape(s)}</option>`).join("") : `<option value="">—</option>`}
         </select>
       </td>
-      <td>${x.duplicado ? `<span class="muted small">Ya registrado</span>` : ""}</td>
+      <td>${estadoCell}</td>
     </tr>`;
-  }).join("");
-  if (total > 250) {
-    body.innerHTML += `<tr><td colspan="7" class="muted center small">+ ${total - 250} más usan la categoría por defecto</td></tr>`;
+  }).join("") || `<tr><td colspan="7" class="muted center">${soloDup ? "No hay duplicados." : "No hay movimientos para importar con estos filtros."}</td></tr>`;
+  if (filasMostradas.length > 250) {
+    body.innerHTML += `<tr><td colspan="7" class="muted center small">+ ${filasMostradas.length - 250} más usan la categoría por defecto</td></tr>`;
   }
 
   // Listeners para cambios por fila
@@ -2564,6 +2603,19 @@ function renderPreviewImport() {
       const idx = sel.dataset.idx;
       const catSel = body.querySelector(`.imp-row-cat[data-idx="${idx}"]`);
       _importData.overrides[idx] = { cat: catSel.value, sub: sel.value };
+    });
+  });
+  body.querySelectorAll(".imp-dup-action").forEach((sel) => {
+    sel.addEventListener("change", () => {
+      const idx = sel.dataset.idx;
+      _importData.dupAction[idx] = sel.value;
+      const check = body.querySelector(`.imp-check[data-i="${idx}"]`);
+      if (check) check.checked = sel.value !== "omitir";
+      const tr = sel.closest("tr");
+      if (tr) {
+        tr.classList.remove("dup-action-omitir", "dup-action-duplicar", "dup-action-reemplazar");
+        tr.classList.add("dup-action-" + sel.value);
+      }
     });
   });
 }
@@ -2640,17 +2692,38 @@ function ejecutarImport() {
   const tipoGasto = $("#imp-tipo").value;
   const catDef = $("#imp-cat").value;
   const subDef = $("#imp-subcat").value;
-  const seleccionados = new Set(
+  const skipDup = $("#imp-skip-dup").checked;
+  const visiblesChecked = new Set(
     $$(".imp-check").filter((c) => c.checked).map((c) => parseInt(c.dataset.i, 10))
   );
-  let nGastos = 0, nIngresos = 0, nDup = 0;
+  const visiblesEnDom = new Set(
+    $$(".imp-check").map((c) => parseInt(c.dataset.i, 10))
+  );
+  let nGastos = 0, nIngresos = 0, nDupOmit = 0, nReemplazos = 0;
   const overrides = _importData.overrides || {};
+  const dupActions = _importData.dupAction || {};
   _importData.rowsFiltradas.forEach((x) => {
-    if (!seleccionados.has(x.idx)) {
-      if (x.duplicado) nDup++;
-      return;
+    const enDom = visiblesEnDom.has(x.idx);
+    const checked = visiblesChecked.has(x.idx);
+
+    if (x.duplicado) {
+      const accion = dupActions[x.idx] || (skipDup ? "omitir" : "duplicar");
+      if (accion === "omitir") { nDupOmit++; return; }
+      if (enDom && !checked) { nDupOmit++; return; }
+      if (accion === "reemplazar" && x.conflicto) {
+        if (x.conflicto.tipo === "gasto") {
+          state.gastos = state.gastos.filter((g) => g.id !== x.conflicto.id);
+        } else {
+          state.ingresos = state.ingresos.filter((g) => g.id !== x.conflicto.id);
+        }
+        nReemplazos++;
+      }
+    } else {
+      // Filas no-duplicadas: si están en el DOM, respetar checkbox del usuario.
+      // Si están filtradas fuera (modo "solo duplicados"), importar por defecto.
+      if (enDom && !checked) return;
     }
-    // Categoría por fila (override del usuario) o default
+
     const ov = overrides[x.idx];
     const catFinal = (ov && ov.cat) || catDef;
     const subFinal = (ov && ov.sub != null) ? ov.sub : subDef;
@@ -2677,6 +2750,7 @@ function ejecutarImport() {
         fecha: x.fecha,
         descripcion: x.concepto,
         importe: Math.abs(x.importe),
+        tipo: _modoApp === "comun" ? "compartido" : "personal",
         categoria: catFinal,
         miembro,
         recurrente: false,
@@ -2690,7 +2764,10 @@ function ejecutarImport() {
   save();
   cerrarImport();
   renderAll();
-  toast(`Importados: ${nGastos} gastos, ${nIngresos} ingresos${nDup ? " · " + nDup + " duplicados omitidos" : ""}`);
+  const partes = [`Importados: ${nGastos} gastos, ${nIngresos} ingresos`];
+  if (nReemplazos) partes.push(`${nReemplazos} reemplazados`);
+  if (nDupOmit) partes.push(`${nDupOmit} duplicados omitidos`);
+  toast(partes.join(" · "));
 }
 
 // Listeners de importación
@@ -2707,7 +2784,7 @@ $("#file-import-banco").addEventListener("change", async (e) => {
   }
 });
 
-["map-fecha", "map-concepto", "map-importe", "map-importe-pos", "imp-desde", "imp-hasta", "imp-skip-dup"].forEach((id) => {
+["map-fecha", "map-concepto", "map-importe", "map-importe-pos", "imp-desde", "imp-hasta", "imp-skip-dup", "imp-solo-dup"].forEach((id) => {
   document.addEventListener("change", (e) => { if (e.target.id === id) renderPreviewImport(); });
 });
 

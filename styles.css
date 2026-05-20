@@ -1361,8 +1361,33 @@ details summary:hover { color: var(--ink-soft); }
   background: var(--bg-soft);
   z-index: 2;
 }
-.import-preview tr.dup td { opacity: 0.55; }
-.import-preview tr.dup td .badge { opacity: 0.7; }
+.import-preview tr.dup td { background: color-mix(in srgb, #f0b400 12%, transparent); }
+.import-preview tr.dup.dup-action-omitir td { opacity: 0.5; }
+.import-preview tr.dup.dup-action-reemplazar td { background: color-mix(in srgb, var(--brand) 15%, transparent); }
+.dup-aviso {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px;
+  margin: 10px 0;
+  padding: 10px 14px;
+  background: color-mix(in srgb, #f0b400 18%, var(--surface-2));
+  border: 1px solid color-mix(in srgb, #f0b400 50%, transparent);
+  border-radius: var(--r-sm);
+  font-size: .88rem;
+}
+.dup-aviso .checkbox { margin-bottom: 0; }
+.badge-dup {
+  background: #f0b400;
+  color: #2a2000;
+  white-space: nowrap;
+}
+.dup-estado {
+  display: flex; flex-direction: column; gap: 4px;
+  min-width: 220px;
+}
+.dup-estado .xsmall { font-size: .72rem; }
+.imp-dup-action {
+  font-size: .76rem;
+  padding: 4px 6px;
+}
 .import-preview .imp-check {
   width: 18px; height: 18px;
   min-height: 0;
