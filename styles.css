@@ -943,6 +943,46 @@ button.link.small { font-size: .8rem; }
   color: var(--muted);
 }
 
+/* ============= Reparto inline (en listado de gastos) ============= */
+.rep-resumen {
+  display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px;
+}
+.rep-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--c, var(--brand)) 18%, transparent);
+  color: var(--c, var(--ink));
+  font-size: .72rem;
+  font-weight: 600;
+  border: 1px solid color-mix(in srgb, var(--c, var(--brand)) 35%, transparent);
+  white-space: nowrap;
+}
+.reparto-editor-row > td {
+  background: var(--surface-2);
+  padding: 14px 16px;
+}
+.reparto-editor {
+  display: flex; flex-direction: column; gap: 10px;
+  max-width: 480px;
+}
+.reparto-editor-title {
+  font-size: .9rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+.reparto-editor-inputs {
+  display: flex; flex-direction: column; gap: 8px;
+}
+.reparto-editor-suma {
+  font-variant-numeric: tabular-nums;
+}
+.reparto-editor-suma.warn { color: var(--neg, #c44); font-weight: 600; }
+.reparto-editor-actions {
+  display: flex; flex-wrap: wrap; gap: 8px;
+}
+.reparto-editor-actions button { margin: 0 !important; }
+
 /* ============= Listas ============= */
 .list { display: flex; flex-direction: column; gap: 6px; }
 .row-item {

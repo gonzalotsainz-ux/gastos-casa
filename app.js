@@ -150,9 +150,12 @@ function gastosDelModo() {
     )
   );
 }
+function tipoIngreso(i) {
+  return i && i.tipo === "compartido" ? "compartido" : "personal";
+}
 function ingresosDelModo() {
-  if (_modoApp === "comun") return state.ingresos.slice();
-  return state.ingresos.filter((i) => i.miembro === _miembroActivoId);
+  if (_modoApp === "comun") return state.ingresos.filter((i) => tipoIngreso(i) === "compartido");
+  return state.ingresos.filter((i) => i.miembro === _miembroActivoId && tipoIngreso(i) === "personal");
 }
 function ahorrosDelModo() {
   if (_modoApp === "comun") return state.ahorros.filter((a) => a.ambito === "compartido");
@@ -1129,10 +1132,41 @@ function renderGastos() {
     const subOptions = subs.length
       ? subs.map((s) => `<option ${s === g.subcategoria ? "selected" : ""}>${escape(s)}</option>`).join("")
       : `<option value="">—</option>`;
+    const esCompartido = _modoApp === "comun" && (g.tipo === "compartido" || (g.tipo === "inesperado" && esRepartoCompartido(g.reparto)));
+    const repartoResumen = esCompartido
+      ? state.miembros
+          .filter((m) => Number(g.reparto?.[m.id]) > 0)
+          .map((m) => `<span class="rep-chip" style="--c:${escape(m.color)}" title="${escape(m.nombre)}">${escape(m.nombre.charAt(0))} ${Number(g.reparto[m.id])}%</span>`)
+          .join("")
+      : "";
+    const repartoEditor = esCompartido
+      ? `<tr class="reparto-editor-row" data-for="${escape(g.id)}" hidden>
+          <td colspan="7">
+            <div class="reparto-editor">
+              <strong class="reparto-editor-title">Reparto del pago</strong>
+              <div class="reparto-editor-inputs">
+                ${state.miembros.map((m) => `
+                  <div class="rep-row">
+                    <span class="rep-name" style="--c:${escape(m.color)}">${escape(m.nombre)}</span>
+                    <input type="number" min="0" max="100" step="1" data-mid="${escape(m.id)}" value="${Number(g.reparto?.[m.id]) || 0}" />
+                    <span>%</span>
+                  </div>`).join("")}
+              </div>
+              <div class="reparto-editor-suma muted small">Suma: <span data-suma>0</span>%</div>
+              <div class="reparto-editor-actions">
+                <button type="button" class="ghost small" data-reparto-igual="${escape(g.id)}">Repartir igual</button>
+                <button type="button" class="ghost small" data-reparto-default="${escape(g.id)}">Usar por defecto</button>
+                <button type="button" class="ghost small" data-reparto-cancel="${escape(g.id)}">Cancelar</button>
+                <button type="button" class="primary small" data-reparto-save="${escape(g.id)}">Aplicar</button>
+              </div>
+            </div>
+          </td>
+        </tr>`
+      : "";
     return `<tr data-id="${escape(g.id)}">
       <td>${fmtFecha(g.fecha)}</td>
       <td>${escape(g.descripcion)}${g.nota ? `<div class="muted small">${escape(g.nota)}</div>` : ""}</td>
-      <td><span class="badge badge-${g.tipo}">${tipoLbl}</span></td>
+      <td><span class="badge badge-${g.tipo}">${tipoLbl}</span>${repartoResumen ? `<div class="rep-resumen">${repartoResumen}</div>` : ""}</td>
       <td class="cat-edit-cell">
         <select class="row-cat" data-id="${escape(g.id)}" title="Categoría">${catOptions}</select>
         <select class="row-sub" data-id="${escape(g.id)}" title="Subcategoría">${subOptions}</select>
@@ -1140,11 +1174,12 @@ function renderGastos() {
       <td><span class="chip" style="--c:${escape(getMiembro(g.pagadoPor)?.color || "#888")}">${escape(nombreMiembro(g.pagadoPor))}</span></td>
       <td class="num">${fmtMoney(g.importe)}</td>
       <td class="acciones">
+        ${esCompartido ? `<button class="link" data-reparto-toggle="${escape(g.id)}" title="Editar porcentaje de cada miembro">Reparto</button>` : ""}
         ${_modoApp === "personal" && (g.tipo === "personal" || g.tipo === "inesperado") ? `<button class="link" data-mover="${escape(g.id)}" title="Pasar a gasto compartido del hogar">→ Compartido</button>` : ""}
         ${_modoApp === "comun" && g.tipo === "compartido" ? `<button class="link" data-mover-personal="${escape(g.id)}" title="Pasar a gasto personal del que pagó">→ Personal</button>` : ""}
         <button class="link danger" data-del="${escape(g.id)}">Eliminar</button>
       </td>
-    </tr>`;
+    </tr>${repartoEditor}`;
   }).join("") || `<tr><td colspan="7" class="muted center">Sin gastos con esos filtros</td></tr>`;
   $("#suma-gastos").textContent = `· ${list.length} mov. · Total ${fmtMoney(total)}`;
   tb.querySelectorAll(".row-cat").forEach((sel) => {
@@ -1211,6 +1246,101 @@ function renderGastos() {
       toast("Movido a personal de " + nombre);
     });
   });
+  const editorRowFor = (id) => tb.querySelector(`.reparto-editor-row[data-for="${cssEscape(id)}"]`);
+  const recalcSuma = (row) => {
+    const sumaEl = row.querySelector("[data-suma]");
+    if (!sumaEl) return;
+    let s = 0;
+    row.querySelectorAll(".reparto-editor-inputs input").forEach((inp) => { s += Number(inp.value) || 0; });
+    sumaEl.textContent = s;
+    sumaEl.parentElement.classList.toggle("warn", s !== 100);
+  };
+  tb.querySelectorAll(".reparto-editor-row").forEach((row) => {
+    row.querySelectorAll(".reparto-editor-inputs input").forEach((inp) => {
+      inp.addEventListener("input", () => recalcSuma(row));
+    });
+    recalcSuma(row);
+  });
+  tb.querySelectorAll("[data-reparto-toggle]").forEach((b) => {
+    b.addEventListener("click", () => {
+      const id = b.dataset.repartoToggle;
+      const row = editorRowFor(id);
+      if (!row) return;
+      const willOpen = row.hasAttribute("hidden");
+      tb.querySelectorAll(".reparto-editor-row").forEach((r) => r.setAttribute("hidden", ""));
+      if (willOpen) {
+        row.removeAttribute("hidden");
+        const first = row.querySelector("input");
+        if (first) first.focus();
+      }
+    });
+  });
+  tb.querySelectorAll("[data-reparto-cancel]").forEach((b) => {
+    b.addEventListener("click", () => {
+      const g = state.gastos.find((x) => x.id === b.dataset.repartoCancel);
+      const row = editorRowFor(b.dataset.repartoCancel);
+      if (!row || !g) return;
+      row.querySelectorAll(".reparto-editor-inputs input").forEach((inp) => {
+        inp.value = Number(g.reparto?.[inp.dataset.mid]) || 0;
+      });
+      recalcSuma(row);
+      row.setAttribute("hidden", "");
+    });
+  });
+  tb.querySelectorAll("[data-reparto-igual]").forEach((b) => {
+    b.addEventListener("click", () => {
+      const row = editorRowFor(b.dataset.repartoIgual);
+      if (!row) return;
+      const ms = state.miembros;
+      const pct = Math.floor(100 / ms.length);
+      const inputs = row.querySelectorAll(".reparto-editor-inputs input");
+      inputs.forEach((inp, i) => {
+        inp.value = (i === inputs.length - 1) ? 100 - pct * (inputs.length - 1) : pct;
+      });
+      recalcSuma(row);
+    });
+  });
+  tb.querySelectorAll("[data-reparto-default]").forEach((b) => {
+    b.addEventListener("click", () => {
+      const row = editorRowFor(b.dataset.repartoDefault);
+      if (!row) return;
+      const def = repartoPorDefecto();
+      row.querySelectorAll(".reparto-editor-inputs input").forEach((inp) => {
+        inp.value = Number(def[inp.dataset.mid]) || 0;
+      });
+      recalcSuma(row);
+    });
+  });
+  tb.querySelectorAll("[data-reparto-save]").forEach((b) => {
+    b.addEventListener("click", () => {
+      const id = b.dataset.repartoSave;
+      const g = state.gastos.find((x) => x.id === id);
+      const row = editorRowFor(id);
+      if (!g || !row) return;
+      const r = {};
+      let sum = 0;
+      row.querySelectorAll(".reparto-editor-inputs input").forEach((inp) => {
+        const v = Math.max(0, Math.min(100, Number(inp.value) || 0));
+        r[inp.dataset.mid] = v;
+        sum += v;
+      });
+      if (sum === 0) { toast("La suma no puede ser 0%"); return; }
+      if (sum !== 100) {
+        const factor = 100 / sum;
+        Object.keys(r).forEach((k) => { r[k] = Math.round(r[k] * factor * 100) / 100; });
+      }
+      g.reparto = r;
+      save();
+      renderGastos();
+      renderInicio();
+      renderCuadre();
+      toast("Reparto actualizado");
+    });
+  });
+}
+
+function cssEscape(s) {
+  return String(s).replace(/["\\]/g, "\\$&");
 }
 
 ["filtro-mes-gasto", "filtro-tipo-gasto", "filtro-cat-gasto", "filtro-ambito-gasto"].forEach((id) => {
@@ -1231,6 +1361,8 @@ function preparaFormIngreso() {
   const f = $("#form-ingreso");
   f.fecha.value = hoyISO();
   $("#sel-cat-ingreso").innerHTML = state.catIngresos.map((c) => `<option>${escape(c)}</option>`).join("");
+  const selTipo = $("#sel-tipo-ingreso");
+  if (selTipo) selTipo.value = _modoApp === "comun" ? "compartido" : "personal";
   if (_modoApp === "comun") {
     $("#sel-miembro-ingreso").innerHTML = state.miembros.map((m) => `<option value="${escape(m.id)}" ${m.id === _miembroActivoId ? "selected" : ""}>${escape(m.nombre)}</option>`).join("");
   } else {
@@ -1247,6 +1379,7 @@ $("#form-ingreso").addEventListener("submit", (e) => {
     fecha: f.fecha.value,
     descripcion: f.descripcion.value.trim(),
     importe: Number(f.importe.value),
+    tipo: f.tipo ? f.tipo.value : (_modoApp === "comun" ? "compartido" : "personal"),
     categoria: f.categoria.value,
     miembro: f.miembro.value,
     recurrente: f.recurrente.checked,
@@ -1279,22 +1412,40 @@ function renderIngresos() {
   let total = 0;
   tb.innerHTML = list.map((g) => {
     total += Number(g.importe) || 0;
+    const tipo = tipoIngreso(g);
+    const tipoLbl = tipo === "compartido" ? "Compartido" : "Personal";
+    const toggleBtn = tipo === "personal"
+      ? `<button class="link" data-tipo-ing="${escape(g.id)}|compartido" title="Pasar a ingreso compartido del hogar">→ Compartido</button>`
+      : `<button class="link" data-tipo-ing="${escape(g.id)}|personal" title="Pasar a ingreso personal del miembro">→ Personal</button>`;
     return `<tr>
       <td>${fmtFecha(g.fecha)}</td>
       <td>${escape(g.descripcion)}${g.nota ? `<div class="muted small">${escape(g.nota)}</div>` : ""}</td>
+      <td><span class="badge badge-${tipo === "compartido" ? "compartido" : "personal"}">${tipoLbl}</span></td>
       <td>${escape(g.categoria || "")}</td>
       <td><span class="chip" style="--c:${escape(getMiembro(g.miembro)?.color || "#888")}">${escape(nombreMiembro(g.miembro))}</span></td>
       <td class="num">${fmtMoney(g.importe)}</td>
       <td>${g.recurrente ? "↻ Mensual" : "—"}</td>
-      <td class="acciones"><button class="link danger" data-del-ing="${escape(g.id)}">Eliminar</button></td>
+      <td class="acciones">${toggleBtn}<button class="link danger" data-del-ing="${escape(g.id)}">Eliminar</button></td>
     </tr>`;
-  }).join("") || `<tr><td colspan="7" class="muted center">Sin ingresos</td></tr>`;
+  }).join("") || `<tr><td colspan="8" class="muted center">Sin ingresos</td></tr>`;
   $("#suma-ingresos").textContent = `· ${list.length} · Total ${fmtMoney(total)}`;
   tb.querySelectorAll("[data-del-ing]").forEach((b) => {
     b.addEventListener("click", () => {
       if (!confirmar("¿Eliminar este ingreso?")) return;
       state.ingresos = state.ingresos.filter((x) => x.id !== b.dataset.delIng);
       save(); renderIngresos(); renderInicio();
+    });
+  });
+  tb.querySelectorAll("[data-tipo-ing]").forEach((b) => {
+    b.addEventListener("click", () => {
+      const [id, nuevo] = b.dataset.tipoIng.split("|");
+      const ing = state.ingresos.find((x) => x.id === id);
+      if (!ing) return;
+      ing.tipo = nuevo;
+      save();
+      renderIngresos();
+      renderInicio();
+      toast(nuevo === "compartido" ? "Movido a ingreso compartido" : "Movido a ingreso personal");
     });
   });
 }

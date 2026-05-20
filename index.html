@@ -423,6 +423,13 @@
           </div>
           <div class="form-row">
             <label>
+              <span>Tipo</span>
+              <select name="tipo" id="sel-tipo-ingreso">
+                <option value="personal">Personal (mío)</option>
+                <option value="compartido">Compartido (hogar)</option>
+              </select>
+            </label>
+            <label>
               <span>Categoría</span>
               <select name="categoria" id="sel-cat-ingreso"></select>
             </label>
@@ -463,7 +470,7 @@
         </div>
         <table class="tabla">
           <thead><tr>
-            <th>Fecha</th><th>Descripción</th><th>Categoría</th><th>Quién</th><th class="num">Importe</th><th>Recurrente</th><th></th>
+            <th>Fecha</th><th>Descripción</th><th>Tipo</th><th>Categoría</th><th>Quién</th><th class="num">Importe</th><th>Recurrente</th><th></th>
           </tr></thead>
           <tbody id="tabla-ingresos"></tbody>
         </table>
